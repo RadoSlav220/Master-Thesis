@@ -11,6 +11,7 @@ public record ExecutionResponse(
         UUID componentId,
         String status,
         String result,
+        String errorMessage,
         Instant createdAt,
         Instant finishedAt
 ) {
@@ -21,6 +22,7 @@ public record ExecutionResponse(
                 execution.getComponentId(),
                 execution.getStatus().name(),
                 execution.getResult(),
+                execution.getErrorMessage(),
                 execution.getCreatedAt(),
                 execution.getFinishedAt()
         );
