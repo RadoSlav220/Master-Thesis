@@ -1,10 +1,13 @@
 package com.thesis.orchestrator.service;
 
+import com.thesis.orchestrator.domain.Component;
 import com.thesis.orchestrator.domain.Execution;
 import com.thesis.orchestrator.domain.ExecutionStatus;
 import com.thesis.orchestrator.dto.ExecutionRequest;
 import com.thesis.orchestrator.dto.ExecutionResponse;
 import com.thesis.orchestrator.exception.NotFoundException;
+import com.thesis.orchestrator.integration.ComponentClient;
+import com.thesis.orchestrator.exception.ComponentInvocationException;
 import com.thesis.orchestrator.repository.ComponentRepository;
 import com.thesis.orchestrator.repository.DatasetRepository;
 import com.thesis.orchestrator.repository.ExecutionRepository;
@@ -23,26 +26,40 @@ public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final DatasetRepository datasetRepository;
     private final ComponentRepository componentRepository;
+    private final ComponentClient componentClient;
 
     /**
-     * Creates a placeholder execution record. No external service is called yet:
-     * the execution is persisted with status CREATED and an empty result.
+     * Executes a registered component against a dataset. The execution is persisted
+     * as RUNNING, the external component endpoint is invoked synchronously, and the
+     * record is updated to COMPLETED (with the result) or FAILED (with an error
+     * message). A failed invocation is still a valid, stored outcome.
      */
     @Transactional
     public ExecutionResponse create(ExecutionRequest request) {
         if (!datasetRepository.existsById(request.datasetId())) {
             throw new NotFoundException("Dataset not found: " + request.datasetId());
         }
-        if (!componentRepository.existsById(request.componentId())) {
-            throw new NotFoundException("Component not found: " + request.componentId());
-        }
+        Component component = componentRepository.findById(request.componentId())
+                .orElseThrow(() -> new NotFoundException("Component not found: " + request.componentId()));
 
         Execution execution = Execution.builder()
                 .datasetId(request.datasetId())
                 .componentId(request.componentId())
-                .status(ExecutionStatus.CREATED)
+                .status(ExecutionStatus.RUNNING)
                 .createdAt(Instant.now())
                 .build();
+        executionRepository.save(execution);
+
+        try {
+            String result = componentClient.invoke(component.getEndpointUrl(), request.datasetId());
+            execution.setResult(result);
+            execution.setStatus(ExecutionStatus.COMPLETED);
+        } catch (ComponentInvocationException ex) {
+            execution.setErrorMessage(ex.getMessage());
+            execution.setStatus(ExecutionStatus.FAILED);
+        }
+        execution.setFinishedAt(Instant.now());
+
         return ExecutionResponse.from(executionRepository.save(execution));
     }
 

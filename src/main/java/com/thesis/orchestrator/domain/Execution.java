@@ -42,6 +42,9 @@ public class Execution {
     @Column(columnDefinition = "text")
     private String result;
 
+    @Column(columnDefinition = "text")
+    private String errorMessage;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
