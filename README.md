@@ -2,13 +2,29 @@
 
 A Spring Boot service that orchestrates external Digital Twin / ML components. It
 exposes REST endpoints to register **components** and **datasets**, and to trigger
-**executions** that bind a dataset to a component.
+**executions** that bind a dataset to a component. A React frontend provides the
+user interface and geospatial visualization.
+
+## Project structure
+
+```
+.
+├── backend/     Spring Boot orchestration API (Java 25, Maven)
+│   ├── pom.xml
+│   └── src/
+├── frontend/    React + TypeScript UI (Vite)
+│   └── src/
+└── README.md
+```
+
+All backend Maven commands below are run from the `backend/` directory.
 
 ## Prerequisites
 
 - **Java 25** (JDK)
 - **Maven 3.9+**
 - **PostgreSQL 16** running on `localhost:5432`
+- **Node.js 20+** and **npm** (for the frontend)
 
 ## Database setup
 
@@ -33,7 +49,7 @@ in `application.yml`:
 
 Credentials are **not** committed. Provide the password in one of two ways:
 
-**Option A — local profile file** (`src/main/resources/application-local.yml`, git-ignored):
+**Option A — local profile file** (`backend/src/main/resources/application-local.yml`, git-ignored):
 
 ```yaml
 spring:
@@ -48,17 +64,19 @@ spring:
 export DB_PASSWORD=your-password
 ```
 
-## Running
+## Running the backend
 
-With the local profile:
+From the `backend/` directory, with the local profile:
 
 ```bash
+cd backend
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 Or with environment variables set:
 
 ```bash
+cd backend
 mvn spring-boot:run
 ```
 
@@ -141,3 +159,51 @@ curl http://localhost:8080/executions/<execution-id>
 ```
 
 Swap the `endpointUrl` for `.../mock-components/traffic` to run the Traffic component.
+
+## Frontend
+
+A React + TypeScript single-page app (Vite) that provides the UI and visualization
+layer. It talks only to the backend REST API — no analytical logic lives here.
+
+**Stack:** React, TypeScript, Vite, Material UI, Axios, TanStack React Query
+(server state), Zustand (selection state), React Router, MapLibre GL JS (map),
+Recharts (charts).
+
+### Setup & running
+
+```bash
+cd frontend
+npm install          # first time only
+npm run dev          # dev server on http://localhost:5173
+```
+
+In development, API calls to `/api/*` are proxied to the backend at
+`http://localhost:8080` (see `frontend/vite.config.ts`), which avoids browser CORS
+without any backend change. To point at a different backend, set `VITE_API_URL`
+(see `frontend/.env.example`).
+
+Start the backend first, then the frontend.
+
+```bash
+npm run build        # type-check + production build into frontend/dist
+```
+
+### Pages
+
+| Page        | Purpose                                                        |
+|-------------|----------------------------------------------------------------|
+| Dashboard   | Counts of datasets, components, executions                     |
+| Datasets    | List datasets; create one (name, type CSV/GEOJSON, description) |
+| Components  | List components; register one (name, endpoint URL, description) |
+| Executions  | Select a dataset + component, execute, view result JSON        |
+| Map         | Visualize a completed execution's geospatial results + chart   |
+
+### User flow
+
+Create dataset → register a component (e.g. the Air Quality mock endpoint) →
+Executions page: select both and click **Execute** → view the result JSON →
+open **Map** and select the execution to see markers and a values chart.
+
+The map/chart normalize the result client-side: they read `latitude`/`longitude`
+and pick a metric (`value`, else `pm25`/`congestion`, else the first numeric
+field), so both mock components render without any backend change.
