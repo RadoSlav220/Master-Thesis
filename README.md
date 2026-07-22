@@ -1,87 +1,153 @@
-# Master-Thesis — Digital Twin Orchestration Platform
+# Local Digital Twin — Component Orchestration Platform
 
-A Spring Boot service that orchestrates external Digital Twin / ML components. It
-exposes REST endpoints to register **components** and **datasets**, and to trigger
-**executions** that bind a dataset to a component. A React frontend provides the
-user interface and geospatial visualization.
+A prototype **Local Digital Twin** orchestration platform. It manages geospatial
+datasets, registers external analytical **components** (ML / analytical services
+exposed over REST), executes them against datasets, and visualizes the returned
+geospatial results on an interactive map.
+
+## Project overview
+
+A **Digital Twin** is a live digital representation of a physical system — here, a
+city. This platform is the **orchestration layer** of such a twin: it does *not*
+perform analysis itself. Instead it coordinates heterogeneous external analytical
+components through a common execution mechanism and persists their results for
+visualization.
+
+- **Component orchestration** — analytical models live behind REST endpoints. The
+  platform registers them, sends a dataset (and its GeoJSON geometry) to the
+  component, stores the result, and surfaces it. Swapping or adding a model needs no
+  platform change — only a new registered endpoint.
+- **Geospatial focus** — datasets and results are GeoJSON, rendered on MapLibre, so
+  city-scale analytical output (air quality, traffic, …) is immediately visual.
+
+### Thesis context
+
+This repository is the practical artifact of a master's thesis. It demonstrates that
+a platform can integrate geospatial datasets, invoke external analytical services
+through a uniform interface, and visualize city-related results — the core capability
+of a Local Digital Twin. This step focuses on **reproducibility and demonstration
+readiness**: the whole system runs with a single command.
+
+## Architecture
+
+```
+        React Frontend (MapLibre + MUI)
+                  |  REST (/api → proxied)
+                  v
+         Spring Boot Backend (orchestration)
+                  |  REST (synchronous invoke)
+                  v
+       External Analytical Components (mock)
+                  |  GeoJSON FeatureCollection
+                  v
+          Execution Results (PostgreSQL)
+                  |
+                  v
+          MapLibre Visualization
+```
+
+The frontend talks only to the backend REST API. The backend orchestrates external
+components and persists datasets/executions in PostgreSQL. Analytical logic stays in
+the (currently mock) external components.
 
 ## Project structure
 
 ```
 .
-├── backend/     Spring Boot orchestration API (Java 25, Maven)
-│   ├── pom.xml
+├── backend/          Spring Boot orchestration API (Java 25, Maven)
+│   ├── Dockerfile
 │   └── src/
-├── frontend/    React + TypeScript UI (Vite)
+├── frontend/         React + TypeScript UI (Vite, nginx in Docker)
+│   ├── Dockerfile
 │   └── src/
+├── sample-data/      Example GeoJSON datasets for the demo
+├── docker-compose.yml
+├── .env.example
 └── README.md
 ```
 
-All backend Maven commands below are run from the `backend/` directory.
+## Quick start (Docker)
 
-## Prerequisites
-
-- **Java 25** (JDK)
-- **Maven 3.9+**
-- **PostgreSQL 16** running on `localhost:5432`
-- **Node.js 20+** and **npm** (for the frontend)
-
-## Database setup
-
-The app expects a database named `orchestrator`. Create it once:
-
-```sql
-CREATE DATABASE orchestrator;
-```
-
-Tables are created automatically on first boot (Hibernate `ddl-auto: update`).
-
-## Configuration
-
-Datasource settings resolve from environment variables, with local-dev defaults
-in `application.yml`:
-
-| Variable      | Default                                              |
-|---------------|------------------------------------------------------|
-| `DB_URL`      | `jdbc:postgresql://localhost:5432/orchestrator`      |
-| `DB_USERNAME` | `postgres`                                           |
-| `DB_PASSWORD` | *(empty)*                                            |
-
-Credentials are **not** committed. Provide the password in one of two ways:
-
-**Option A — local profile file** (`backend/src/main/resources/application-local.yml`, git-ignored):
-
-```yaml
-spring:
-  datasource:
-    username: postgres
-    password: your-password
-```
-
-**Option B — environment variables:**
+The entire stack — PostgreSQL, backend, frontend — runs with one command:
 
 ```bash
-export DB_PASSWORD=your-password
+cp .env.example .env          # optional; sensible defaults are built in
+docker compose up --build
 ```
 
-## Running the backend
+Then open **http://localhost:3000**.
 
-From the `backend/` directory, with the local profile:
+On startup the backend runs with the `demo` profile, which **auto-registers** the two
+mock analytical components (Air Quality, Traffic), so no manual setup is needed for a
+demo. Services:
 
-```bash
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=local
-```
+| Service   | URL / port                    | Notes                                  |
+|-----------|-------------------------------|----------------------------------------|
+| Frontend  | http://localhost:3000         | nginx serving the React build          |
+| Backend   | http://localhost:8080         | Spring Boot REST API                   |
+| Postgres  | internal (`postgres:5432`)    | data persisted in the `pgdata` volume  |
 
-Or with environment variables set:
+Configuration is via environment variables (see `.env.example`):
+
+- Backend: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`
+- Frontend: `VITE_API_URL` (default `/api`, proxied by nginx to the backend)
+
+> **Note on Java:** the project targets **Java 25** (see `backend/pom.xml`), so the
+> backend image uses a Java 25 base image rather than Java 21.
+
+## Demo scenario
+
+With the stack running (components already auto-registered), open
+http://localhost:3000 and:
+
+1. **Upload a GeoJSON dataset** — Datasets → *Create Dataset* → type `GEOJSON` →
+   choose a file from [`sample-data/`](sample-data/).
+2. **Select an analytical component** — the Air Quality / Traffic models are already
+   listed under Components.
+3. **Execute the component** — Executions → pick the dataset + component → *Execute*.
+4. **Visualize results** — Map → *Result* mode → select the execution to see the
+   returned GeoJSON features colored by value, plus a chart.
+
+## Health & info endpoints
+
+| Endpoint  | Response                                                      |
+|-----------|--------------------------------------------------------------|
+| `GET /health` | `{"status":"UP"}`                                        |
+| `GET /info`   | `{"name":"Local Digital Twin Platform","version":"0.1.0"}` |
+
+## Local development (without Docker)
+
+### Prerequisites
+
+- **Java 25** (JDK), **Maven 3.9+**
+- **PostgreSQL 16** running on `localhost:5432` with a database named `orchestrator`
+- **Node.js 20+** and **npm**
+
+### Backend
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-The API starts on `http://localhost:8080`. Startup is confirmed by the
-`Started OrchestratorApplication` log line.
+Datasource settings resolve from environment variables (`DB_URL`, `DB_USERNAME`,
+`DB_PASSWORD`) with local defaults in `application.yml`. Credentials are not
+committed — provide the password via a git-ignored
+`backend/src/main/resources/application-local.yml` (run with
+`-Dspring-boot.run.profiles=local`) or `export DB_PASSWORD=...`.
+
+The API starts on `http://localhost:8080` (`Started OrchestratorApplication` in logs).
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev          # dev server on http://localhost:5173
+```
+
+In dev, `/api/*` calls are proxied to `http://localhost:8080` (see
+`frontend/vite.config.ts`). Start the backend first.
 
 ## API
 
