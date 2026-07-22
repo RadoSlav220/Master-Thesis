@@ -36,6 +36,9 @@ public class Dataset {
     @Column(columnDefinition = "text")
     private String description;
 
+    @Column(columnDefinition = "text")
+    private String geoJsonContent;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 }

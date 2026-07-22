@@ -7,6 +7,7 @@ export interface Dataset {
   name: string;
   type: string;
   description: string | null;
+  hasGeoJson: boolean;
   createdAt: string;
 }
 
@@ -47,10 +48,27 @@ export interface CreateExecutionRequest {
   componentId: string;
 }
 
-/** Normalized geospatial point derived from an execution result. */
-export interface MapPoint {
-  latitude: number;
-  longitude: number;
-  value: number;
-  label: string;
+/** Minimal GeoJSON types (subset of the spec we render). */
+export type GeoJsonGeometryType =
+  | "Point"
+  | "MultiPoint"
+  | "LineString"
+  | "MultiLineString"
+  | "Polygon"
+  | "MultiPolygon";
+
+export interface GeoJsonGeometry {
+  type: GeoJsonGeometryType;
+  coordinates: unknown;
+}
+
+export interface GeoJsonFeature {
+  type: "Feature";
+  properties: Record<string, unknown> | null;
+  geometry: GeoJsonGeometry | null;
+}
+
+export interface GeoJsonFeatureCollection {
+  type: "FeatureCollection";
+  features: GeoJsonFeature[];
 }

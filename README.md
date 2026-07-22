@@ -129,7 +129,11 @@ HTTP `201` — the failure is a recorded outcome, not a request error.
 ### Mock components
 
 Two in-app endpoints simulate future external services, so the flow is demoable
-without deploying a real model. Each accepts `POST { "datasetId": "<uuid>" }`.
+without deploying a real model. Each accepts
+`POST { "datasetId": "<uuid>", "geoJson": <FeatureCollection|null> }` and returns a
+**GeoJSON FeatureCollection**: if the request carries dataset geometry, each input
+feature is echoed with a computed metric attached; otherwise a small static set of
+Sofia points is returned.
 
 | Component    | Endpoint                                       | Metric       |
 |--------------|------------------------------------------------|--------------|
@@ -159,6 +163,54 @@ curl http://localhost:8080/executions/<execution-id>
 ```
 
 Swap the `endpointUrl` for `.../mock-components/traffic` to run the Traffic component.
+
+## Geospatial datasets (GeoJSON)
+
+Datasets can carry a GeoJSON `FeatureCollection`. The backend stores the raw
+content (as text — no PostGIS) and passes it to components at execution time, so
+analytical results come back as GeoJSON ready to render on a map.
+
+### Endpoints
+
+| Method / path                 | Purpose                                             |
+|-------------------------------|-----------------------------------------------------|
+| `POST /datasets/upload`       | Multipart upload of a `.geojson` file               |
+| `GET /datasets/{id}/geojson`  | Returns the stored `FeatureCollection`              |
+
+`POST /datasets/upload` is `multipart/form-data` with parts: `file` (the GeoJSON),
+`name`, and optional `description`. The backend validates that the file is a
+`FeatureCollection` with a `features` array (basic structural check) and returns
+`400` otherwise. Uploaded datasets get `type = GEOJSON` and `hasGeoJson = true`.
+
+At execution time the component receives:
+
+```json
+{ "datasetId": "...", "geoJson": { "type": "FeatureCollection", "features": [ ... ] } }
+```
+
+### Sample data
+
+Small example FeatureCollections live in [`sample-data/`](sample-data/):
+
+- `sofia-air-quality.geojson` — 5 sensor Points
+- `sofia-traffic.geojson` — LineStrings + a Polygon
+
+### Example
+
+```bash
+# Upload a GeoJSON dataset
+curl -X POST http://localhost:8080/datasets/upload \
+  -F "file=@sample-data/sofia-air-quality.geojson" \
+  -F "name=Sofia Air Quality"
+
+# Fetch its geometry back
+curl http://localhost:8080/datasets/<dataset-id>/geojson
+
+# Execute the air-quality component -> result is a FeatureCollection with pm25 per feature
+curl -X POST http://localhost:8080/executions \
+  -H "Content-Type: application/json" \
+  -d '{"datasetId":"<dataset-id>","componentId":"<component-id>"}'
+```
 
 ## Frontend
 
@@ -190,20 +242,27 @@ npm run build        # type-check + production build into frontend/dist
 
 ### Pages
 
-| Page        | Purpose                                                        |
-|-------------|----------------------------------------------------------------|
-| Dashboard   | Counts of datasets, components, executions                     |
-| Datasets    | List datasets; create one (name, type CSV/GEOJSON, description) |
-| Components  | List components; register one (name, endpoint URL, description) |
-| Executions  | Select a dataset + component, execute, view result JSON        |
-| Map         | Visualize a completed execution's geospatial results + chart   |
+| Page            | Purpose                                                              |
+|-----------------|---------------------------------------------------------------------|
+| Dashboard       | Counts of datasets, components, executions                          |
+| Datasets        | List datasets; upload a GeoJSON file or create a plain dataset      |
+| Dataset Details | Metadata, feature count, geometry types, and a map preview          |
+| Components      | List components; register one (name, endpoint URL, description)     |
+| Executions      | Select a dataset + component, execute, view result JSON             |
+| Map             | Two modes — **Dataset** (preview geometry) and **Result** (execution output) — rendered as GeoJSON layers with a values chart |
+
+### GeoJSON rendering
+
+The Map and Dataset Details pages render a `FeatureCollection` using MapLibre
+GeoJSON source + layers: `circle` for points, `line` for LineStrings, and `fill`
+for Polygons/MultiPolygons. Features are colored on a green→red scale by a detected
+numeric property (`value`, else `pm25`/`congestion`, else the first numeric field),
+and point values are shown as labels.
 
 ### User flow
 
-Create dataset → register a component (e.g. the Air Quality mock endpoint) →
-Executions page: select both and click **Execute** → view the result JSON →
-open **Map** and select the execution to see markers and a values chart.
-
-The map/chart normalize the result client-side: they read `latitude`/`longitude`
-and pick a metric (`value`, else `pm25`/`congestion`, else the first numeric
-field), so both mock components render without any backend change.
+Upload a GeoJSON dataset → open **Dataset Details** to see its geometry, feature
+count, and types → register a component (e.g. the Air Quality mock) → **Executions**
+page: select the dataset + component and click **Execute** → the result is a
+GeoJSON `FeatureCollection` → open **Map**, switch to **Result** mode, and select
+the execution to see the colored features plus a values chart.

@@ -1,6 +1,9 @@
 package com.thesis.orchestrator.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Component;
+import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.Execution;
 import com.thesis.orchestrator.domain.ExecutionStatus;
 import com.thesis.orchestrator.dto.ExecutionRequest;
@@ -27,18 +30,19 @@ public class ExecutionService {
     private final DatasetRepository datasetRepository;
     private final ComponentRepository componentRepository;
     private final ComponentClient componentClient;
+    private final ObjectMapper objectMapper;
 
     /**
      * Executes a registered component against a dataset. The execution is persisted
-     * as RUNNING, the external component endpoint is invoked synchronously, and the
-     * record is updated to COMPLETED (with the result) or FAILED (with an error
-     * message). A failed invocation is still a valid, stored outcome.
+     * as RUNNING, the external component endpoint is invoked synchronously (receiving
+     * the dataset's GeoJSON content when available), and the record is updated to
+     * COMPLETED (with the result) or FAILED (with an error message). A failed
+     * invocation is still a valid, stored outcome.
      */
     @Transactional
     public ExecutionResponse create(ExecutionRequest request) {
-        if (!datasetRepository.existsById(request.datasetId())) {
-            throw new NotFoundException("Dataset not found: " + request.datasetId());
-        }
+        Dataset dataset = datasetRepository.findById(request.datasetId())
+                .orElseThrow(() -> new NotFoundException("Dataset not found: " + request.datasetId()));
         Component component = componentRepository.findById(request.componentId())
                 .orElseThrow(() -> new NotFoundException("Component not found: " + request.componentId()));
 
@@ -51,7 +55,8 @@ public class ExecutionService {
         executionRepository.save(execution);
 
         try {
-            String result = componentClient.invoke(component.getEndpointUrl(), request.datasetId());
+            JsonNode geoJson = parseGeoJson(dataset.getGeoJsonContent());
+            String result = componentClient.invoke(component.getEndpointUrl(), request.datasetId(), geoJson);
             execution.setResult(result);
             execution.setStatus(ExecutionStatus.COMPLETED);
         } catch (ComponentInvocationException ex) {
@@ -61,6 +66,18 @@ public class ExecutionService {
         execution.setFinishedAt(Instant.now());
 
         return ExecutionResponse.from(executionRepository.save(execution));
+    }
+
+    private JsonNode parseGeoJson(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(content);
+        } catch (Exception ex) {
+            // Stored content failed to parse; send no geometry rather than failing hard.
+            return null;
+        }
     }
 
     public List<ExecutionResponse> getAll() {

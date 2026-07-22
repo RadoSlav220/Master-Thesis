@@ -1,61 +1,74 @@
-import type { Execution, MapPoint } from "../types";
+import type { Execution, GeoJsonFeatureCollection } from "../types";
 
-/** Fields that carry latitude, tolerating a few naming variants. */
-const LAT_KEYS = ["latitude", "lat"];
-const LNG_KEYS = ["longitude", "lng", "lon"];
-/** Preferred metric fields, in priority order, before falling back to any number. */
+/** Property names, in priority order, treated as the primary metric to visualize. */
 const VALUE_KEYS = ["value", "pm25", "congestion"];
 
-function pickNumber(row: Record<string, unknown>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    const v = row[key];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-  }
-  return undefined;
-}
-
-function pickValue(row: Record<string, unknown>): { value: number; label: string } | undefined {
-  for (const key of VALUE_KEYS) {
-    const v = row[key];
-    if (typeof v === "number" && Number.isFinite(v)) return { value: v, label: key };
-  }
-  // Fallback: first numeric field that isn't a coordinate.
-  for (const [key, v] of Object.entries(row)) {
-    if (LAT_KEYS.includes(key) || LNG_KEYS.includes(key)) continue;
-    if (typeof v === "number" && Number.isFinite(v)) return { value: v, label: key };
-  }
-  return undefined;
+/** Type guard for a GeoJSON FeatureCollection. */
+function isFeatureCollection(v: unknown): v is GeoJsonFeatureCollection {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as { type?: unknown }).type === "FeatureCollection" &&
+    Array.isArray((v as { features?: unknown }).features)
+  );
 }
 
 /**
- * Parses an execution's raw JSON `result` string into normalized map points.
- * Supports the mock components' shape:
- *   { "component": "...", "results": [ { latitude, longitude, pm25 | congestion } ] }
- * and the generic spec shape { results: [ { latitude, longitude, value } ] }.
- * Returns [] if the result is missing or unparseable.
+ * Parses an execution's raw JSON `result` string into a GeoJSON FeatureCollection.
+ * Returns null if the result is missing, unparseable, or not a FeatureCollection.
  */
-export function parseResultPoints(execution: Execution | null | undefined): MapPoint[] {
-  if (!execution?.result) return [];
-  let parsed: unknown;
+export function parseFeatureCollection(
+  execution: Execution | null | undefined,
+): GeoJsonFeatureCollection | null {
+  if (!execution?.result) return null;
   try {
-    parsed = JSON.parse(execution.result);
+    const parsed: unknown = JSON.parse(execution.result);
+    return isFeatureCollection(parsed) ? parsed : null;
   } catch {
-    return [];
+    return null;
   }
-  const results = (parsed as { results?: unknown })?.results;
-  if (!Array.isArray(results)) return [];
+}
 
-  const points: MapPoint[] = [];
-  for (const item of results) {
-    if (typeof item !== "object" || item === null) continue;
-    const row = item as Record<string, unknown>;
-    const latitude = pickNumber(row, LAT_KEYS);
-    const longitude = pickNumber(row, LNG_KEYS);
-    const valued = pickValue(row);
-    if (latitude === undefined || longitude === undefined || !valued) continue;
-    points.push({ latitude, longitude, value: valued.value, label: valued.label });
+/** Distinct geometry types present in a FeatureCollection, in first-seen order. */
+export function geometryTypes(fc: GeoJsonFeatureCollection | null | undefined): string[] {
+  if (!fc) return [];
+  const seen: string[] = [];
+  for (const f of fc.features) {
+    const t = f.geometry?.type;
+    if (t && !seen.includes(t)) seen.push(t);
   }
-  return points;
+  return seen;
+}
+
+/**
+ * Detects the primary numeric property to visualize: the first of value/pm25/
+ * congestion that appears, else the first numeric property found on any feature.
+ */
+export function detectValueProperty(fc: GeoJsonFeatureCollection | null | undefined): string | null {
+  if (!fc) return null;
+  for (const key of VALUE_KEYS) {
+    if (fc.features.some((f) => typeof f.properties?.[key] === "number")) return key;
+  }
+  for (const f of fc.features) {
+    for (const [key, v] of Object.entries(f.properties ?? {})) {
+      if (typeof v === "number" && Number.isFinite(v)) return key;
+    }
+  }
+  return null;
+}
+
+/** Collects the numeric values of a given property across all features. */
+export function collectValues(
+  fc: GeoJsonFeatureCollection | null | undefined,
+  property: string,
+): number[] {
+  if (!fc) return [];
+  const out: number[] = [];
+  for (const f of fc.features) {
+    const v = f.properties?.[property];
+    if (typeof v === "number" && Number.isFinite(v)) out.push(v);
+  }
+  return out;
 }
 
 /** Pretty-prints a raw JSON string; returns the original text if it can't parse. */
