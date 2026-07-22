@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Blvd Tsarigradsko", "road": "TR-01" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [23.3400, 42.6850],
+          [23.3600, 42.6700],
+          [23.3780, 42.6560]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Blvd Bulgaria", "road": "TR-02" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [23.3150, 42.6800],
+          [23.3120, 42.6650],
+          [23.3100, 42.6500]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "City Center Zone", "road": "TR-03" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [23.3150, 42.6980],
+            [23.3300, 42.6980],
+            [23.3300, 42.6900],
+            [23.3150, 42.6900],
+            [23.3150, 42.6980]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,13 +1,19 @@
 package com.thesis.orchestrator.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.exception.InvalidGeoJsonException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.repository.DatasetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -17,12 +23,32 @@ import java.util.UUID;
 public class DatasetService {
 
     private final DatasetRepository datasetRepository;
+    private final ObjectMapper objectMapper;
 
     public DatasetResponse create(DatasetRequest request) {
         Dataset dataset = Dataset.builder()
                 .name(request.name())
                 .type(request.type())
                 .description(request.description())
+                .createdAt(Instant.now())
+                .build();
+        return DatasetResponse.from(datasetRepository.save(dataset));
+    }
+
+    /**
+     * Creates a dataset from an uploaded GeoJSON file. Performs basic structural
+     * validation (must be a FeatureCollection with a features array) and stores the
+     * raw content verbatim. No advanced/GIS validation is performed.
+     */
+    public DatasetResponse upload(MultipartFile file, String name, String description) {
+        String content = readFile(file);
+        validateFeatureCollection(content);
+
+        Dataset dataset = Dataset.builder()
+                .name(name)
+                .type("GEOJSON")
+                .description(description)
+                .geoJsonContent(content)
                 .createdAt(Instant.now())
                 .build();
         return DatasetResponse.from(datasetRepository.save(dataset));
@@ -35,8 +61,48 @@ public class DatasetService {
     }
 
     public DatasetResponse getById(UUID id) {
-        Dataset dataset = datasetRepository.findById(id)
+        return DatasetResponse.from(findEntity(id));
+    }
+
+    /** Returns the raw GeoJSON FeatureCollection stored for a dataset. */
+    public String getGeoJson(UUID id) {
+        Dataset dataset = findEntity(id);
+        String content = dataset.getGeoJsonContent();
+        if (content == null || content.isBlank()) {
+            throw new NotFoundException("Dataset has no GeoJSON content: " + id);
+        }
+        return content;
+    }
+
+    private Dataset findEntity(UUID id) {
+        return datasetRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Dataset not found: " + id));
-        return DatasetResponse.from(dataset);
+    }
+
+    private String readFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidGeoJsonException("Uploaded file is empty.");
+        }
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new InvalidGeoJsonException("Could not read uploaded file: " + ex.getMessage());
+        }
+    }
+
+    private void validateFeatureCollection(String content) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(content);
+        } catch (IOException ex) {
+            throw new InvalidGeoJsonException("File is not valid JSON: " + ex.getMessage());
+        }
+        JsonNode type = root.get("type");
+        if (type == null || !"FeatureCollection".equals(type.asText())) {
+            throw new InvalidGeoJsonException("GeoJSON must have type \"FeatureCollection\".");
+        }
+        if (!root.has("features") || !root.get("features").isArray()) {
+            throw new InvalidGeoJsonException("GeoJSON FeatureCollection must contain a \"features\" array.");
+        }
     }
 }

@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { CreateDatasetRequest, Dataset } from "../types";
+import type { CreateDatasetRequest, Dataset, GeoJsonFeatureCollection } from "../types";
 
 export const datasetApi = {
   list: async (): Promise<Dataset[]> => {
@@ -12,6 +12,20 @@ export const datasetApi = {
   },
   create: async (payload: CreateDatasetRequest): Promise<Dataset> => {
     const { data } = await apiClient.post<Dataset>("/datasets", payload);
+    return data;
+  },
+  upload: async (file: File, name: string, description?: string): Promise<Dataset> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("name", name);
+    if (description) form.append("description", description);
+    const { data } = await apiClient.post<Dataset>("/datasets/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+  getGeoJson: async (id: string): Promise<GeoJsonFeatureCollection> => {
+    const { data } = await apiClient.get<GeoJsonFeatureCollection>(`/datasets/${id}/geojson`);
     return data;
   },
 };

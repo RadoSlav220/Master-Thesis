@@ -8,10 +8,35 @@ export function useDatasets() {
   return useQuery({ queryKey: KEY, queryFn: datasetApi.list });
 }
 
+export function useDataset(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, id],
+    queryFn: () => datasetApi.get(id as string),
+    enabled: !!id,
+  });
+}
+
+export function useDatasetGeoJson(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, id, "geojson"],
+    queryFn: () => datasetApi.getGeoJson(id as string),
+    enabled: !!id,
+  });
+}
+
 export function useCreateDataset() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateDatasetRequest) => datasetApi.create(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useUploadDataset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { file: File; name: string; description?: string }) =>
+      datasetApi.upload(vars.file, vars.name, vars.description),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

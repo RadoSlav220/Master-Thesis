@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Datasets from "./pages/Datasets";
+import DatasetDetails from "./pages/DatasetDetails";
 import Components from "./pages/Components";
 import Executions from "./pages/Executions";
 import MapView from "./pages/MapView";
@@ -21,6 +22,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/datasets" element={<Datasets />} />
+              <Route path="/datasets/:id" element={<DatasetDetails />} />
               <Route path="/components" element={<Components />} />
               <Route path="/executions" element={<Executions />} />
               <Route path="/map" element={<MapView />} />

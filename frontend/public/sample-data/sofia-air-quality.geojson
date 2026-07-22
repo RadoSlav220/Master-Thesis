@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Sensor Center", "station": "SOF-01" },
+      "geometry": { "type": "Point", "coordinates": [23.3219, 42.6977] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sensor Lozenets", "station": "SOF-02" },
+      "geometry": { "type": "Point", "coordinates": [23.3300, 42.6750] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sensor Mladost", "station": "SOF-03" },
+      "geometry": { "type": "Point", "coordinates": [23.3780, 42.6550] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sensor Nadezhda", "station": "SOF-04" },
+      "geometry": { "type": "Point", "coordinates": [23.3050, 42.7250] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sensor Studentski", "station": "SOF-05" },
+      "geometry": { "type": "Point", "coordinates": [23.3450, 42.6500] }
+    }
+  ]
+}

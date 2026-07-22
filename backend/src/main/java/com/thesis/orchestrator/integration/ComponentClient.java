@@ -1,16 +1,19 @@
 package com.thesis.orchestrator.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.thesis.orchestrator.exception.ComponentInvocationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Invokes an external analytical component over REST. The platform acts purely as
- * an orchestration layer: it POSTs the dataset reference to the component's
- * endpoint and returns the raw JSON response body, which is persisted verbatim.
+ * an orchestration layer: it POSTs the dataset reference (and its GeoJSON content,
+ * when available) to the component's endpoint and returns the raw JSON response
+ * body, which is persisted verbatim.
  */
 @Component
 public class ComponentClient {
@@ -21,11 +24,14 @@ public class ComponentClient {
         this.restClient = builder.build();
     }
 
-    public String invoke(String endpointUrl, UUID datasetId) {
+    public String invoke(String endpointUrl, UUID datasetId, JsonNode geoJson) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("datasetId", datasetId);
+        body.put("geoJson", geoJson); // null is serialized as JSON null
         try {
             return restClient.post()
                     .uri(endpointUrl)
-                    .body(Map.of("datasetId", datasetId))
+                    .body(body)
                     .retrieve()
                     .body(String.class);
         } catch (Exception ex) {
