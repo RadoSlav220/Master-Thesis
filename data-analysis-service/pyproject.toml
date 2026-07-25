@@ -5,3 +5,10 @@ line-length = 100
 [tool.ruff.lint]
 # A pragmatic default set: pyflakes (F) + pycodestyle errors (E) + import sorting (I).
 select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+# Put the service root on sys.path so tests can `import app...` regardless of the
+# directory pytest is invoked from (fixes ModuleNotFoundError: No module named 'app').
+pythonpath = ["."]
+testpaths = ["tests"]
+
