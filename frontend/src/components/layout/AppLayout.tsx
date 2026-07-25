@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import StorageIcon from "@mui/icons-material/Storage";
+import CloudIcon from "@mui/icons-material/Cloud";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import MapIcon from "@mui/icons-material/Map";
@@ -22,6 +23,7 @@ const DRAWER_WIDTH = 220;
 
 const NAV: { label: string; to: string; icon: ReactNode }[] = [
   { label: "Dashboard", to: "/", icon: <DashboardIcon /> },
+  { label: "Data Sources", to: "/data-sources", icon: <CloudIcon /> },
   { label: "Datasets", to: "/datasets", icon: <StorageIcon /> },
   { label: "Components", to: "/components", icon: <ExtensionIcon /> },
   { label: "Executions", to: "/executions", icon: <PlayArrowIcon /> },

@@ -6,15 +6,21 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
   Stack,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ScienceIcon from "@mui/icons-material/Science";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMemo } from "react";
 import PageHeader from "../components/common/PageHeader";
 import GeoJsonMap from "../map/GeoJsonMap";
-import { useDataset, useDatasetGeoJson } from "../hooks/useDatasets";
+import { useAnalyzeDataset, useDataset, useDatasetGeoJson } from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
 
 export default function DatasetDetails() {
@@ -22,11 +28,28 @@ export default function DatasetDetails() {
   const navigate = useNavigate();
   const dataset = useDataset(id);
   const geo = useDatasetGeoJson(dataset.data?.hasGeoJson ? id : null);
+  const analyze = useAnalyzeDataset();
 
   const fc = geo.data ?? null;
   const types = useMemo(() => geometryTypes(fc), [fc]);
   const valueProperty = useMemo(() => detectValueProperty(fc), [fc]);
   const featureCount = fc?.features.length ?? 0;
+
+  // Prefer freshly re-run analysis; otherwise fall back to the persisted result.
+  const persistedAnalysis = useMemo(() => {
+    const raw = dataset.data?.analysisResult;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as { datasetType: string; columns?: string[]; properties?: string[] };
+    } catch {
+      return null;
+    }
+  }, [dataset.data?.analysisResult]);
+
+  const analysis = analyze.data ?? persistedAnalysis;
+  const analyzedItems = analysis?.columns ?? analysis?.properties ?? [];
+  const analyzedLabel = analysis?.columns ? "Columns" : "Properties";
+  const canAnalyze = !!dataset.data?.hasGeoJson || dataset.data?.type === "CSV";
 
   return (
     <>
@@ -78,6 +101,59 @@ export default function DatasetDetails() {
               </Typography>
               {geo.isLoading ? <CircularProgress /> : <GeoJsonMap data={fc} valueProperty={valueProperty} />}
             </Box>
+          )}
+
+          {canAnalyze && (
+            <Card>
+              <CardContent>
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  sx={{ mb: 2, alignItems: "center", justifyContent: "space-between" }}
+                >
+                  <Typography variant="h6">Dataset Analysis</Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<ScienceIcon />}
+                    onClick={() => analyze.mutate(id)}
+                    disabled={analyze.isPending}
+                  >
+                    {persistedAnalysis ? "Re-analyze" : "Analyze Dataset"}
+                  </Button>
+                </Stack>
+
+                {analyze.isPending && <CircularProgress size={24} />}
+                {analyze.isError && (
+                  <Alert severity="error">
+                    Analysis failed — the analysis service may be unavailable.
+                  </Alert>
+                )}
+
+                {analysis && (
+                  <>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Dataset Type: <Chip label={analysis.datasetType} size="small" />
+                    </Typography>
+                    <Typography variant="subtitle2">{analyzedLabel}</Typography>
+                    <List dense>
+                      {analyzedItems.map((item) => (
+                        <ListItem key={item} disableGutters>
+                          <ListItemIcon sx={{ minWidth: 32 }}>
+                            <CheckCircleIcon color="success" fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText primary={item} />
+                        </ListItem>
+                      ))}
+                      {analyzedItems.length === 0 && (
+                        <ListItem disableGutters>
+                          <ListItemText primary="No columns or properties found." />
+                        </ListItem>
+                      )}
+                    </List>
+                  </>
+                )}
+              </CardContent>
+            </Card>
           )}
         </Stack>
       )}

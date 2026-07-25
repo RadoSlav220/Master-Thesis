@@ -34,8 +34,12 @@ readiness**: the whole system runs with a single command.
         React Frontend (MapLibre + MUI)
                   |  REST (/api → proxied)
                   v
-         Spring Boot Backend (orchestration)
-                  |  REST (synchronous invoke)
+         Spring Boot Backend (orchestration)  ───────►  Python Dataset
+                  |                                      Analysis Service
+                  |  1. fetch snapshot from a Data       (FastAPI + Pandas)
+                  |     Source (mock external API)        - /analyze (structure)
+                  |  2. auto-analyze + persist            - /filter  (subset)
+                  |  3. (optional) filter before run
                   v
        External Analytical Components (mock)
                   |  GeoJSON FeatureCollection
@@ -46,9 +50,16 @@ readiness**: the whole system runs with a single command.
           MapLibre Visualization
 ```
 
+The pipeline: register a **Data Source** → **fetch** a dataset snapshot for a time
+period → the backend **auto-analyzes** it (via the Python service) and **persists** the
+result → optionally **filter** (select columns/properties + row limit) → run an
+analytical **component** → visualize the GeoJSON result on the map.
+
 The frontend talks only to the backend REST API. The backend orchestrates external
-components and persists datasets/executions in PostgreSQL. Analytical logic stays in
-the (currently mock) external components.
+components, delegates data-processing (structure analysis and filtering) to the Python
+service, and persists data sources / datasets / executions in PostgreSQL. Analytical
+logic stays in the (currently mock) external components and the specialized Python
+service.
 
 ## Project structure
 
@@ -60,6 +71,9 @@ the (currently mock) external components.
 ├── frontend/         React + TypeScript UI (Vite, nginx in Docker)
 │   ├── Dockerfile
 │   └── src/
+├── data-analysis-service/   Python FastAPI dataset-analysis microservice
+│   ├── Dockerfile
+│   └── app/
 ├── sample-data/      Example GeoJSON datasets for the demo
 ├── docker-compose.yml
 ├── .env.example
@@ -97,15 +111,22 @@ Configuration is via environment variables (see `.env.example`):
 
 ## Demo scenario
 
-With the stack running (components already auto-registered), open
-http://localhost:3000 and:
+With the stack running (the two mock analytical components are auto-registered), open
+http://localhost:3000 and either **fetch** a dataset from a data source or **upload**
+one:
 
-1. **Upload a GeoJSON dataset** — Datasets → *Create Dataset* → type `GEOJSON` →
-   choose a file from [`sample-data/`](sample-data/).
-2. **Select an analytical component** — the Air Quality / Traffic models are already
-   listed under Components.
-3. **Execute the component** — Executions → pick the dataset + component → *Execute*.
-4. **Visualize results** — Map → *Result* mode → select the execution to see the
+1. **Register a Data Source** — Data Sources → *Register Data Source* → type `API`,
+   output format `GEOJSON` (or `CSV`).
+2. **Fetch a dataset** — on that source, click *Fetch*, give it a name and a date range.
+   The backend generates a snapshot, **auto-analyzes** it, and stores the analysis. The
+   new dataset appears under Datasets. *(Alternatively: Datasets → Create Dataset →
+   `GEOJSON` → upload a file from [`sample-data/`](sample-data/).)*
+3. **Inspect the dataset** — open its details to see metadata, the persisted analysis
+   (columns/properties), geometry types, and a map preview.
+4. **Execute a component** — Executions → pick the dataset + a component (Air Quality /
+   Traffic) → optionally **filter** (tick which columns/properties to include, set a row
+   limit) → *Execute*.
+5. **Visualize results** — Map → *Result* mode → select the execution to see the
    returned GeoJSON features colored by value, plus a chart.
 
 ## Health & info endpoints
@@ -122,6 +143,7 @@ http://localhost:3000 and:
 - **Java 25** (JDK), **Maven 3.9+**
 - **PostgreSQL 16** running on `localhost:5432` with a database named `orchestrator`
 - **Node.js 20+** and **npm**
+- **Python 3.12** (for the dataset analysis service)
 
 ### Backend
 
@@ -137,6 +159,17 @@ committed — provide the password via a git-ignored
 `-Dspring-boot.run.profiles=local`) or `export DB_PASSWORD=...`.
 
 The API starts on `http://localhost:8080` (`Started OrchestratorApplication` in logs).
+Analysis/filtering delegate to the Python service (default `http://localhost:8000`),
+so start that too if you exercise those features.
+
+### Dataset analysis service
+
+```bash
+cd data-analysis-service
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
 
 ### Frontend
 
@@ -153,29 +186,40 @@ In dev, `/api/*` calls are proxied to `http://localhost:8080` (see
 
 Each resource supports create (`POST`), list (`GET`), and fetch-by-id (`GET /{id}`).
 
-| Resource     | Base path      |
-|--------------|----------------|
-| Components   | `/components`  |
-| Datasets     | `/datasets`    |
-| Executions   | `/executions`  |
+| Resource      | Base path        |
+|---------------|------------------|
+| Data Sources  | `/data-sources`  |
+| Components     | `/components`     |
+| Datasets       | `/datasets`       |
+| Executions     | `/executions`     |
+
+Additional endpoints:
+
+| Method / path                    | Purpose                                                    |
+|----------------------------------|------------------------------------------------------------|
+| `POST /data-sources/{id}/fetch`  | Fetch a dataset snapshot for a period; auto-analyze + store |
+| `POST /datasets/upload`          | Multipart upload of a GeoJSON file                          |
+| `GET /datasets/{id}/geojson`     | The stored GeoJSON FeatureCollection                        |
+| `POST /datasets/{id}/analyze`    | (Re-)run structure analysis via the Python service          |
 
 ### Example
 
 ```bash
-# Create a component
-curl -X POST http://localhost:8080/components \
+# Register a data source
+curl -X POST http://localhost:8080/data-sources \
   -H "Content-Type: application/json" \
-  -d '{"name":"anomaly-detector","endpointUrl":"http://localhost:9000/run","description":"demo"}'
+  -d '{"name":"Sofia AQ API","type":"API","outputFormat":"GEOJSON"}'
 
-# Create a dataset
-curl -X POST http://localhost:8080/datasets \
+# Fetch a dataset snapshot from it (auto-analyzed + stored)
+curl -X POST http://localhost:8080/data-sources/<source-id>/fetch \
   -H "Content-Type: application/json" \
-  -d '{"name":"sensor-readings","type":"timeseries","description":"demo"}'
+  -d '{"name":"AQ Snapshot","startDate":"2026-07-01","endDate":"2026-07-05"}'
 
-# Trigger an execution (use the ids returned above)
+# Trigger an execution, optionally filtering the dataset first
 curl -X POST http://localhost:8080/executions \
   -H "Content-Type: application/json" \
-  -d '{"datasetId":"<dataset-id>","componentId":"<component-id>"}'
+  -d '{"datasetId":"<dataset-id>","componentId":"<component-id>",
+       "filter":{"columns":["pm25"],"limit":2}}'
 
 # List executions
 curl http://localhost:8080/executions
@@ -278,6 +322,55 @@ curl -X POST http://localhost:8080/executions \
   -d '{"datasetId":"<dataset-id>","componentId":"<component-id>"}'
 ```
 
+## Data sources & fetching
+
+Rather than only uploading files, datasets can be **fetched** from a registered
+**Data Source**. A data source records an external feed (`type` = `API`; a `DATABASE`
+type is reserved for later) and its `outputFormat` (`CSV` or `GEOJSON`).
+
+Fetching a snapshot for a date range:
+
+1. `POST /data-sources/{id}/fetch` with `{ name, startDate, endDate }`.
+2. The backend generates a mock snapshot in the source's format (external fetch is
+   mocked for now — no real network call), stores it as a new dataset, then **runs
+   structure analysis once and persists the result** on the dataset.
+
+Because a fetched snapshot is immutable, caching its analysis is safe — the dataset
+records its `datasetType`, its `analysisResult`, and the `sourceId` it came from
+(provenance). The Dataset Details page shows the persisted analysis without re-calling
+the Python service.
+
+## Dataset analysis service
+
+A standalone **Python (FastAPI)** microservice handles data-processing so the backend
+stays a pure orchestrator. It inspects dataset structure and filters datasets. See
+[`data-analysis-service/`](data-analysis-service/).
+
+- **`POST /analyze`** (multipart `file`) → `{ "datasetType": "CSV", "columns": [...] }`
+  or `{ "datasetType": "GEOJSON", "properties": [...] }`.
+- **`POST /filter`** (multipart `file` + `columns` + `limit`) → reduces the dataset to
+  the selected columns/properties and caps rows/features, returning
+  `{ "datasetType", "content" }`.
+
+How the backend uses it:
+
+- **Analysis** — persisted automatically on fetch; also re-runnable via
+  `POST /datasets/{id}/analyze` (the Dataset Details **Analyze** button).
+- **Filtering** — when an execution request includes a `filter`
+  (`{ "columns": [...], "limit": N }`), the backend sends the dataset content to
+  `/filter` first and passes the **filtered** content to the component. The applied
+  filter is persisted on the execution (`filterSpec`) for provenance. On the Executions
+  page, the filter options come from the dataset's stored analysis (checkboxes + a row
+  limit).
+
+Configured via `dataset.analysis.service.url` (env `DATASET_ANALYSIS_SERVICE_URL`,
+default `http://localhost:8000`). The service is included in `docker-compose.yml`, so
+`docker compose up --build` runs it alongside the rest of the stack.
+
+> **v1 note:** filtering feeds the mock model end-to-end for **GeoJSON** datasets. CSV
+> filtering works in the service and is stored/shown, but the current mock components
+> consume GeoJSON, so CSV → model is deferred.
+
 ## Frontend
 
 A React + TypeScript single-page app (Vite) that provides the UI and visualization
@@ -311,10 +404,11 @@ npm run build        # type-check + production build into frontend/dist
 | Page            | Purpose                                                              |
 |-----------------|---------------------------------------------------------------------|
 | Dashboard       | Counts of datasets, components, executions                          |
+| Data Sources    | Register external sources; **Fetch** a dataset for a date range     |
 | Datasets        | List datasets; upload a GeoJSON file or create a plain dataset      |
-| Dataset Details | Metadata, feature count, geometry types, and a map preview          |
+| Dataset Details | Metadata, persisted analysis, feature count, geometry types, map preview |
 | Components      | List components; register one (name, endpoint URL, description)     |
-| Executions      | Select a dataset + component, execute, view result JSON             |
+| Executions      | Select a dataset + component, optionally **filter** (columns + row limit), execute, view result |
 | Map             | Two modes — **Dataset** (preview geometry) and **Result** (execution output) — rendered as GeoJSON layers with a values chart |
 
 ### GeoJSON rendering
@@ -327,8 +421,10 @@ and point values are shown as labels.
 
 ### User flow
 
-Upload a GeoJSON dataset → open **Dataset Details** to see its geometry, feature
-count, and types → register a component (e.g. the Air Quality mock) → **Executions**
-page: select the dataset + component and click **Execute** → the result is a
-GeoJSON `FeatureCollection` → open **Map**, switch to **Result** mode, and select
-the execution to see the colored features plus a values chart.
+Register a **Data Source** → **Fetch** a dataset for a date range (auto-analyzed) →
+open **Dataset Details** to see the persisted analysis, geometry, and map preview →
+**Executions** page: select the dataset + a component, optionally tick which
+columns/properties to keep and a row limit, then **Execute** → the result is a GeoJSON
+`FeatureCollection` → open **Map**, switch to **Result** mode, and select the execution
+to see the colored features plus a values chart. *(Uploading a GeoJSON file is an
+alternative to fetching.)*

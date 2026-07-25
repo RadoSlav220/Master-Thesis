@@ -40,3 +40,9 @@ export function useUploadDataset() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useAnalyzeDataset() {
+  return useMutation({
+    mutationFn: (id: string) => datasetApi.analyze(id),
+  });
+}

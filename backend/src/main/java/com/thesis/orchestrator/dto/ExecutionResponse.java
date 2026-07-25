@@ -12,6 +12,7 @@ public record ExecutionResponse(
         String status,
         String result,
         String errorMessage,
+        String filterSpec,
         Instant createdAt,
         Instant finishedAt
 ) {
@@ -23,6 +24,7 @@ public record ExecutionResponse(
                 execution.getStatus().name(),
                 execution.getResult(),
                 execution.getErrorMessage(),
+                execution.getFilterSpec(),
                 execution.getCreatedAt(),
                 execution.getFinishedAt()
         );
