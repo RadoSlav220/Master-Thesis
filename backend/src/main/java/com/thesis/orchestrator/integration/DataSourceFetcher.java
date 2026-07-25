@@ -3,14 +3,15 @@ package com.thesis.orchestrator.integration;
 import com.thesis.orchestrator.domain.DataSource;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Generates mock dataset content for a data source over a requested time period.
+ * Generates mock dataset content for a data source over a requested time window.
  * This stands in for a real external API fetch: no network call is made. Output is
  * either CSV or a GeoJSON FeatureCollection, matching the source's declared format.
+ * The window is expressed as UTC instants, so timestamps identify exact moments.
  */
 @Component
 public class DataSourceFetcher {
@@ -24,8 +25,8 @@ public class DataSourceFetcher {
 
     private static final int MAX_ROWS = 30;
 
-    /** Returns generated content in the source's output format for the given period. */
-    public String fetch(DataSource source, LocalDate startDate, LocalDate endDate) {
+    /** Returns generated content in the source's output format for the given window. */
+    public String fetch(DataSource source, Instant startDate, Instant endDate) {
         String metric = metricFor(source);
         if ("CSV".equalsIgnoreCase(source.getOutputFormat())) {
             return generateCsv(metric, startDate, endDate);
@@ -42,14 +43,20 @@ public class DataSourceFetcher {
         return "pm25";
     }
 
-    private String generateCsv(String metric, LocalDate startDate, LocalDate endDate) {
-        long days = Math.max(1, ChronoUnit.DAYS.between(startDate, endDate) + 1);
-        long rows = Math.min(days, MAX_ROWS);
+    /**
+     * Produces one row per evenly-spaced instant across [startDate, endDate], up to
+     * MAX_ROWS rows. Each timestamp is an exact UTC moment (ISO-8601, e.g. ...Z).
+     */
+    private String generateCsv(String metric, Instant startDate, Instant endDate) {
+        long totalMinutes = Math.max(0, ChronoUnit.MINUTES.between(startDate, endDate));
+        long rows = Math.min(MAX_ROWS, Math.max(1, totalMinutes == 0 ? 1 : totalMinutes / 60 + 1));
+        long stepMinutes = rows > 1 ? totalMinutes / (rows - 1) : 0;
+
         StringBuilder sb = new StringBuilder("timestamp,latitude,longitude,").append(metric).append("\n");
         for (long i = 0; i < rows; i++) {
-            LocalDate day = startDate.plusDays(i);
+            Instant ts = startDate.plus(stepMinutes * i, ChronoUnit.MINUTES);
             double[] coord = SOFIA_POINTS[(int) (i % SOFIA_POINTS.length)];
-            sb.append(day).append("T00:00:00Z,")
+            sb.append(ts).append(",")
                     .append(coord[1]).append(",")
                     .append(coord[0]).append(",")
                     .append(value(metric))

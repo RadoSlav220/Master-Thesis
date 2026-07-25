@@ -1,45 +1,12 @@
-# Compiled class files
-*.class
+# Cross-cutting ignores (OS, editors, secrets). Language/build-specific rules live in
+# each subproject's own .gitignore (backend/, frontend/, data-analysis-service/).
 
-# Log files
+# Logs
 *.log
 
-# Package files
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# JVM crash logs
-hs_err_pid*
-replay_pid*
-
-### Maven ###
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-
-### Gradle ###
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### Spring Boot ###
-*.original
+# Environment / secrets
+.env
+*.env.local
 
 ### IntelliJ IDEA ###
 .idea/
@@ -74,9 +41,3 @@ bin/
 ### Windows ###
 Thumbs.db
 Desktop.ini
-
-### Environment / secrets ###
-.env
-*.env.local
-application-local.properties
-application-local.yml
