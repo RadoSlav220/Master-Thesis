@@ -72,16 +72,18 @@ export default function FetchDatasetForm({ source, open, onClose }: FetchDataset
               fullWidth
             />
             <DateTimePicker
-              label="Start"
+              label="Fetch data from"
               value={start}
               onChange={setStart}
+              ampm={false}
               slotProps={{ textField: { fullWidth: true } }}
             />
             <DateTimePicker
-              label="End"
+              label="Fetch data until"
               value={end}
               onChange={setEnd}
               minDateTime={start ?? undefined}
+              ampm={false}
               slotProps={{ textField: { fullWidth: true } }}
             />
             {start && end && !validRange && (
