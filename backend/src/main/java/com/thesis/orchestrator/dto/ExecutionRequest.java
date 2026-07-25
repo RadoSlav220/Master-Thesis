@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record ExecutionRequest(
         @NotNull UUID datasetId,
-        @NotNull UUID componentId
+        @NotNull UUID componentId,
+        FilterSpec filter
 ) {
 }

@@ -1,5 +1,6 @@
 package com.thesis.orchestrator.controller;
 
+import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.service.DatasetService;
@@ -56,5 +57,10 @@ public class DatasetController {
     @GetMapping(value = "/{id}/geojson", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> getGeoJson(@PathVariable UUID id) {
         return ResponseEntity.ok(datasetService.getGeoJson(id));
+    }
+
+    @PostMapping("/{id}/analyze")
+    public DatasetAnalysisResponse analyze(@PathVariable UUID id) {
+        return datasetService.analyze(id);
     }
 }

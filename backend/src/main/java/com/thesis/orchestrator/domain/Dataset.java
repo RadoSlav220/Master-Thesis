@@ -36,8 +36,21 @@ public class Dataset {
     @Column(columnDefinition = "text")
     private String description;
 
+    /** Raw dataset content — CSV text or a GeoJSON FeatureCollection. */
     @Column(columnDefinition = "text")
-    private String geoJsonContent;
+    private String content;
+
+    /** Persisted structure analysis (JSON string from the analysis service). */
+    @Column(columnDefinition = "text")
+    private String analysisResult;
+
+    /** Dataset type as reported by analysis, e.g. CSV or GEOJSON. */
+    @Column
+    private String datasetType;
+
+    /** The data source this dataset was fetched from, if any (provenance). */
+    @Column
+    private UUID sourceId;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

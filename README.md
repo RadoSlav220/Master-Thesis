@@ -34,9 +34,9 @@ readiness**: the whole system runs with a single command.
         React Frontend (MapLibre + MUI)
                   |  REST (/api → proxied)
                   v
-         Spring Boot Backend (orchestration)
-                  |  REST (synchronous invoke)
-                  v
+         Spring Boot Backend (orchestration)  ───────►  Python Dataset
+                  |  REST (synchronous invoke)          Analysis Service
+                  v                                     (FastAPI + Pandas)
        External Analytical Components (mock)
                   |  GeoJSON FeatureCollection
                   v
@@ -47,8 +47,9 @@ readiness**: the whole system runs with a single command.
 ```
 
 The frontend talks only to the backend REST API. The backend orchestrates external
-components and persists datasets/executions in PostgreSQL. Analytical logic stays in
-the (currently mock) external components.
+components, forwards dataset files to the Python analysis service for structure
+inspection, and persists datasets/executions in PostgreSQL. Analytical logic stays in
+the (currently mock) external components and the specialized Python service.
 
 ## Project structure
 
@@ -60,6 +61,9 @@ the (currently mock) external components.
 ├── frontend/         React + TypeScript UI (Vite, nginx in Docker)
 │   ├── Dockerfile
 │   └── src/
+├── data-analysis-service/   Python FastAPI dataset-analysis microservice
+│   ├── Dockerfile
+│   └── app/
 ├── sample-data/      Example GeoJSON datasets for the demo
 ├── docker-compose.yml
 ├── .env.example
@@ -277,6 +281,27 @@ curl -X POST http://localhost:8080/executions \
   -H "Content-Type: application/json" \
   -d '{"datasetId":"<dataset-id>","componentId":"<component-id>"}'
 ```
+
+## Dataset analysis service
+
+A standalone **Python (FastAPI)** microservice — the platform's first data-processing
+component — inspects a dataset file and reports its structure. It is the foundation
+for future schema inference, column selection, filtering, and AI model input
+preparation. Orchestration stays in the Spring Boot backend, which forwards the
+dataset file to this service. See [`data-analysis-service/`](data-analysis-service/).
+
+- **Python service**: `POST /analyze` (multipart `file`) → `{ "datasetType": "CSV",
+  "columns": [...] }` or `{ "datasetType": "GEOJSON", "properties": [...] }`.
+- **Backend relay**: `POST /datasets/{id}/analyze` loads the dataset's stored content,
+  sends it to the Python service, and returns the analysis. Configured via
+  `dataset.analysis.service.url` (env `DATASET_ANALYSIS_SERVICE_URL`, default
+  `http://localhost:8000`). Currently applies to datasets with stored file content
+  (GeoJSON uploads).
+- **UI**: the Dataset Details page has an **Analyze Dataset** button that shows the
+  dataset type and its columns/properties.
+
+The service is included in `docker-compose.yml`, so `docker compose up --build` runs it
+alongside the rest of the stack. To run it standalone, see its README.
 
 ## Frontend
 

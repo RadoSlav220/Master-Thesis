@@ -16,3 +16,8 @@ spring:
 
 server:
   port: 8080
+
+dataset:
+  analysis:
+    service:
+      url: ${DATASET_ANALYSIS_SERVICE_URL:http://localhost:8000}

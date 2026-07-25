@@ -18,14 +18,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      data-analysis-service:
+        condition: service_started
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-orchestrator}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       # Activates the demo-data bootstrap (auto-registers the mock components).
       SPRING_PROFILES_ACTIVE: demo
+      # URL of the Python dataset-analysis service (compose service name).
+      DATASET_ANALYSIS_SERVICE_URL: http://data-analysis-service:8000
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+
+  data-analysis-service:
+    build: ./data-analysis-service
+    ports:
+      - "${ANALYSIS_PORT:-8000}:8000"
 
   frontend:
     build:

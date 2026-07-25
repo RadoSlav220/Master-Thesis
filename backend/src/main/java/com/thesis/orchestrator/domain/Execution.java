@@ -45,6 +45,10 @@ public class Execution {
     @Column(columnDefinition = "text")
     private String errorMessage;
 
+    /** The filter applied before invoking the component, if any (JSON, provenance). */
+    @Column(columnDefinition = "text")
+    private String filterSpec;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

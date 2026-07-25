@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import DataSources from "./pages/DataSources";
 import Datasets from "./pages/Datasets";
 import DatasetDetails from "./pages/DatasetDetails";
 import Components from "./pages/Components";
@@ -21,6 +22,7 @@ export default function App() {
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/data-sources" element={<DataSources />} />
               <Route path="/datasets" element={<Datasets />} />
               <Route path="/datasets/:id" element={<DatasetDetails />} />
               <Route path="/components" element={<Components />} />
