@@ -11,6 +11,11 @@ import {
   ListItemIcon,
   ListItemText,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -51,6 +56,10 @@ export default function DatasetDetails() {
   const analyzedLabel = analysis?.columns ? "Columns" : "Properties";
   const canAnalyze = !!dataset.data?.hasGeoJson || dataset.data?.type === "CSV";
 
+  const provenance = dataset.data?.provenance ?? null;
+  const queryParamEntries =
+    provenance?.type === "API" ? Object.entries(provenance.queryParameters ?? {}) : [];
+
   return (
     <>
       <PageHeader title="Dataset Details" />
@@ -70,11 +79,37 @@ export default function DatasetDetails() {
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
                 <Chip label={dataset.data.type} />
-                {dataset.data.hasGeoJson && <Chip label="GeoJSON" color="success" />}
+                {dataset.data.datasetOrigin && (
+                  <Chip label={dataset.data.datasetOrigin} variant="outlined" />
+                )}
               </Stack>
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
                 {dataset.data.description || "No description."}
               </Typography>
+
+              {queryParamEntries.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Query Parameters
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Value</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {queryParamEntries.map(([key, value]) => (
+                        <TableRow key={key}>
+                          <TableCell>{key}</TableCell>
+                          <TableCell>{value}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
 
               <Typography variant="subtitle1">Features: {geo.isLoading ? "…" : featureCount}</Typography>
               <Typography variant="subtitle2" sx={{ mt: 1 }}>

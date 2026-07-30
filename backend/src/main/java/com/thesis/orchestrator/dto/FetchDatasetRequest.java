@@ -1,13 +1,11 @@
 package com.thesis.orchestrator.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
-import java.time.Instant;
+import java.util.Map;
 
 public record FetchDatasetRequest(
         @NotBlank String name,
-        @NotNull Instant startDate,
-        @NotNull Instant endDate
+        Map<String, String> queryParameters
 ) {
 }

@@ -20,9 +20,14 @@ and the reasoning behind key decisions.
 - `frontend/` — React + TypeScript (Vite; nginx in Docker). MUI, Axios, TanStack React
   Query, Zustand, React Router, MapLibre GL JS, Recharts.
 - `data-analysis-service/` — Python 3.12 FastAPI + Pandas microservice (structure
-  analysis + filtering). Uses ruff + pytest; CI runs both.
+  analysis + filtering). Uses ruff + pytest.
 - `docker-compose.yml` (postgres + backend + frontend + data-analysis-service),
   `.env.example`, `sample-data/` (Sofia GeoJSON samples).
+- Each subproject has its **own `.gitignore`** (language/build rules); the root
+  `.gitignore` holds only cross-cutting rules (OS/editor/env/secrets).
+- **CI** (`.github/workflows/build.yml`) runs three jobs on push: `build-backend`
+  (`mvn package`), `build-frontend` (lint + build), `build-analysis-service`
+  (ruff + pytest).
 
 ## The pipeline (the thesis story)
 
@@ -48,7 +53,20 @@ models are **mocked** for now.
   it cannot add NOT NULL columns to populated tables, and column renames leave orphaned
   columns behind. Add new columns **nullable**. Migrating to Flyway is a planned backlog item.
 - **DataSource model** — `type` = `API` (with `DATABASE` reserved for later) + an
-  `outputFormat` of `CSV` or `GEOJSON`.
+  `outputFormat` of `CSV` or `GEOJSON`. At registration a source also declares the
+  **query parameters** its API expects (name, `required` flag, optional `defaultValue`),
+  persisted as a nullable JSON text column (`queryParameters`). Fetching a snapshot is
+  mocked by `DataSourceFetcher` (no real HTTP yet).
+- **Fetch is parameterized by the source's registered query parameters** — the fetch
+  request carries only a dataset `name` + a `Map<String,String> queryParameters` (values
+  for the source's registered params). There are **no dedicated start/end date fields**:
+  a time window, if a source needs one, is just registered as ordinary query parameters.
+  The frontend Fetch dialog renders one text field per registered param (prefilled with
+  its default; required ones enforced). The mock `DataSourceFetcher` derives its CSV
+  window from parseable ISO-8601 values under common keys (`startDate`/`start`/`from`,
+  `endDate`/`end`/`to`) when present, else falls back to a default last-24h window.
+  (The earlier typed `Instant` window + MUI `DateTimePicker` approach was replaced by
+  this generic query-parameter model.)
 - **Filtering (v1)** — column/property selection + row limit only (no value predicates).
   The applied filter is persisted on the execution as `filterSpec`. Filtered data feeds
   the model end-to-end for **GeoJSON**; CSV → model is deferred (mock components consume GeoJSON).
@@ -60,8 +78,17 @@ models are **mocked** for now.
 
 ## Constraints deliberately deferred (MVP scope)
 
-No authentication, PostGIS, workflow chaining, or message queues. (Auth is now a planned
+No authentication, PostGIS, workflow chaining, or message queues. (Auth is a planned
 backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
+
+## Backlog / where work is tracked
+
+Planned work lives in the **"Master Thesis" GitHub Project (v2)** on github.com
+(`RadoSlav220/Master-Thesis`), as epics with sub-issues (Status/Priority/Size fields).
+Notable next-up epics: real external API fetch (replace the mock), Flyway migrations
+(replace `ddl-auto`), authentication & authorization, and a Dashboard enhancement.
+To interact with this repo's GitHub via `gh`, use `GH_HOST=github.com` (the CLI is also
+logged into github.tools.sap, which is the default host).
 
 ## Conventions
 
@@ -69,5 +96,5 @@ backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
   `NotFoundException` and the `GlobalExceptionHandler`.
 - Frontend: MUI `Stack`/`Typography` need an `sx` prop present (an overload-resolution
   quirk in the installed MUI version) — route layout props through `sx`.
-- Each part is checked in CI on push: backend `mvn package`, frontend lint + build,
-  analysis-service ruff + pytest.
+- Backend → Python calls: build multipart with `LinkedMultiValueMap` + `HttpEntity`/
+  `ContentDisposition` on an HTTP/1.1-pinned `RestClient` (see the HTTP-client decision above).

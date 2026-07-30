@@ -1,6 +1,5 @@
 import {
   Alert,
-  Chip,
   CircularProgress,
   Paper,
   Table,
@@ -37,7 +36,6 @@ export default function Datasets() {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Type</TableCell>
-                <TableCell>GeoJSON</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Created</TableCell>
               </TableRow>
@@ -52,16 +50,13 @@ export default function Datasets() {
                 >
                   <TableCell>{d.name}</TableCell>
                   <TableCell>{d.type}</TableCell>
-                  <TableCell>
-                    {d.hasGeoJson ? <Chip label="GeoJSON" color="success" size="small" /> : "—"}
-                  </TableCell>
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                 </TableRow>
               ))}
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={4} align="center">
                     No datasets yet.
                   </TableCell>
                 </TableRow>

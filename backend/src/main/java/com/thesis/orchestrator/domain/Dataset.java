@@ -2,6 +2,8 @@ package com.thesis.orchestrator.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -51,6 +53,15 @@ public class Dataset {
     /** The data source this dataset was fetched from, if any (provenance). */
     @Column
     private UUID sourceId;
+
+    /** Where this dataset came from (UPLOAD, API, DATABASE); drives the provenance shape. */
+    @Enumerated(EnumType.STRING)
+    @Column
+    private DatasetOrigin datasetOrigin;
+
+    /** Origin-specific provenance detail as JSON (see DatasetProvenance); null if unknown. */
+    @Column(columnDefinition = "text")
+    private String provenance;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

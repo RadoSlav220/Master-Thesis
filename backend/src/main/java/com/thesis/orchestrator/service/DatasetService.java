@@ -1,9 +1,12 @@
 package com.thesis.orchestrator.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Dataset;
+import com.thesis.orchestrator.domain.DatasetOrigin;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
+import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.exception.InvalidGeoJsonException;
@@ -33,6 +36,8 @@ public class DatasetService {
                 .name(request.name())
                 .type(request.type())
                 .description(request.description())
+                .datasetOrigin(DatasetOrigin.UPLOAD)
+                .provenance(serializeProvenance(new DatasetProvenance.UploadProvenance()))
                 .createdAt(Instant.now())
                 .build();
         return DatasetResponse.from(datasetRepository.save(dataset));
@@ -52,6 +57,8 @@ public class DatasetService {
                 .type("GEOJSON")
                 .description(description)
                 .content(content)
+                .datasetOrigin(DatasetOrigin.UPLOAD)
+                .provenance(serializeProvenance(new DatasetProvenance.UploadProvenance()))
                 .createdAt(Instant.now())
                 .build();
         return DatasetResponse.from(datasetRepository.save(dataset));
@@ -95,6 +102,14 @@ public class DatasetService {
     /** Maps a dataset type to a filename extension the analysis service recognizes. */
     static String extensionFor(String type) {
         return "CSV".equalsIgnoreCase(type) ? ".csv" : ".geojson";
+    }
+
+    private String serializeProvenance(DatasetProvenance provenance) {
+        try {
+            return objectMapper.writeValueAsString(provenance);
+        } catch (JsonProcessingException ex) {
+            return null;
+        }
     }
 
     private Dataset findEntity(UUID id) {

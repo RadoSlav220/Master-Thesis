@@ -2,6 +2,14 @@ export type ExecutionStatus = "CREATED" | "RUNNING" | "COMPLETED" | "FAILED";
 
 export type DatasetType = "CSV" | "GEOJSON";
 
+export type DatasetOrigin = "UPLOAD" | "API" | "DATABASE";
+
+/** Origin-specific provenance, discriminated by `type` (mirrors the backend). */
+export type DatasetProvenance =
+  | { type: "API"; queryParameters: Record<string, string> | null }
+  | { type: "DATABASE" }
+  | { type: "UPLOAD" };
+
 export interface Dataset {
   id: string;
   name: string;
@@ -11,6 +19,8 @@ export interface Dataset {
   datasetType: string | null;
   analysisResult: string | null;
   sourceId: string | null;
+  datasetOrigin: DatasetOrigin | null;
+  provenance: DatasetProvenance | null;
   createdAt: string;
 }
 
@@ -22,8 +32,7 @@ export interface CreateDatasetRequest {
 
 export interface FetchDatasetRequest {
   name: string;
-  startDate: string;
-  endDate: string;
+  queryParameters?: Record<string, string>;
 }
 
 export interface Component {
