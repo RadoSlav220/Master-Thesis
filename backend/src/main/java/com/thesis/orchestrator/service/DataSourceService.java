@@ -1,6 +1,7 @@
 package com.thesis.orchestrator.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.DataSource;
 import com.thesis.orchestrator.domain.Dataset;
@@ -9,6 +10,7 @@ import com.thesis.orchestrator.dto.DataSourceResponse;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.dto.FetchDatasetRequest;
+import com.thesis.orchestrator.dto.QueryParameter;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.DataSourceFetcher;
 import com.thesis.orchestrator.integration.DatasetAnalysisClient;
@@ -41,19 +43,47 @@ public class DataSourceService {
                 .type(request.type())
                 .outputFormat(request.outputFormat())
                 .description(request.description())
+                .queryParameters(serializeParams(request.queryParameters()))
                 .createdAt(Instant.now())
                 .build();
-        return DataSourceResponse.from(dataSourceRepository.save(dataSource));
+        DataSource saved = dataSourceRepository.save(dataSource);
+        return DataSourceResponse.from(saved, parseParams(saved));
     }
 
     public List<DataSourceResponse> getAll() {
         return dataSourceRepository.findAll().stream()
-                .map(DataSourceResponse::from)
+                .map(source -> DataSourceResponse.from(source, parseParams(source)))
                 .toList();
     }
 
     public DataSourceResponse getById(UUID id) {
-        return DataSourceResponse.from(findEntity(id));
+        DataSource source = findEntity(id);
+        return DataSourceResponse.from(source, parseParams(source));
+    }
+
+    private String serializeParams(List<QueryParameter> params) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(params);
+        } catch (JsonProcessingException ex) {
+            log.warn("Could not serialize query parameters: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private List<QueryParameter> parseParams(DataSource source) {
+        String json = source.getQueryParameters();
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (JsonProcessingException ex) {
+            log.warn("Could not parse query parameters for data source {}: {}", source.getId(), ex.getMessage());
+            return List.of();
+        }
     }
 
     /**

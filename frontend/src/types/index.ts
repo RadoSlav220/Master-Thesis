@@ -75,12 +75,19 @@ export type DataSourceType = "API";
 
 export type DataSourceOutputFormat = "CSV" | "GEOJSON";
 
+export interface QueryParameter {
+  name: string;
+  required: boolean;
+  defaultValue?: string | null;
+}
+
 export interface DataSource {
   id: string;
   name: string;
   type: string;
   outputFormat: string;
   description: string | null;
+  queryParameters: QueryParameter[];
   createdAt: string;
 }
 
@@ -89,6 +96,7 @@ export interface CreateDataSourceRequest {
   type: DataSourceType;
   outputFormat: DataSourceOutputFormat;
   description?: string;
+  queryParameters?: QueryParameter[];
 }
 
 /** Minimal GeoJSON types (subset of the spec we render). */

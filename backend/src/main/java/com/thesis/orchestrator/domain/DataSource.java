@@ -46,6 +46,10 @@ public class DataSource {
     @Column(columnDefinition = "text")
     private String description;
 
+    /** Query parameters the source's API expects (JSON list of QueryParameter). */
+    @Column(columnDefinition = "text")
+    private String queryParameters;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 }
