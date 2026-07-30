@@ -49,14 +49,31 @@ models are **mocked** for now.
 - **Dataset storage** — one generic `content` column (formerly `geoJsonContent`). A
   fetched dataset also stores `datasetType`, a persisted `analysisResult`, and `sourceId`
   (provenance). Fetched snapshots are immutable, so caching their analysis is safe.
-- **Persistence** — Hibernate `ddl-auto: update`. Known limitations already encountered:
-  it cannot add NOT NULL columns to populated tables, and column renames leave orphaned
-  columns behind. Add new columns **nullable**. Migrating to Flyway is a planned backlog item.
-- **DataSource model** — `type` = `API` (with `DATABASE` reserved for later) + an
-  `outputFormat` of `CSV` or `GEOJSON`. At registration a source also declares the
-  **query parameters** its API expects (name, `required` flag, optional `defaultValue`),
-  persisted as a nullable JSON text column (`queryParameters`). Fetching a snapshot is
-  mocked by `DataSourceFetcher` (no real HTTP yet).
+- **Dataset origin & provenance** — a `datasetOrigin` enum (`UPLOAD`/`API`/`DATABASE`)
+  records where a dataset came from, plus a nullable `provenance` JSON column holding the
+  origin-specific detail (for `API`: the query-parameter values used at fetch time). The
+  provenance shape is a **sealed `DatasetProvenance` hierarchy** (`ApiProvenance` /
+  `DatabaseProvenance` / `UploadProvenance`) serialized with a Jackson `"type"`
+  discriminator. Chosen over per-origin nullable columns or JPA entity inheritance: the
+  differences are *data*, not *behavior*, so a discriminator enum + typed JSON blob keeps
+  the schema flat while staying type-safe in code. `sourceId` stays top-level as the
+  canonical source pointer.
+- **Persistence** — Hibernate `ddl-auto: update`. Known limitations: it cannot add NOT
+  NULL columns to populated tables, and column renames/removals leave orphaned columns
+  behind. Add new columns **nullable**. `@Enumerated(STRING)` enums get a generated CHECK
+  constraint on their column. In early dev, the local Postgres volume (`pgdata`) can just
+  be pruned to shed accumulated schema drift. Flyway/migrations are the **lowest-priority**
+  backlog item — do not design around them or treat them as a prerequisite.
+- **DataSource model** — `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
+  reserved for later) + an `outputFormat` of `CSV` or `GEOJSON`. At registration a source
+  also declares the **query parameters** its API expects (name, `required` flag, optional
+  `defaultValue`). These definitions are stored **relationally** as a
+  `@ElementCollection<QueryParameterDefinition>` (table `data_source_query_parameters`,
+  FK `data_source_id`), not a JSON blob — chosen so they're queryable and Hibernate-managed.
+  The `QueryParameter` record stays in `dto/` as the wire contract. Fetching a snapshot is
+  mocked by `DataSourceFetcher` (no real HTTP yet). Future `DATABASE` sources will need
+  type-specific config (connection/query), likely a `DataSourceConfig` sealed hierarchy
+  mirroring `DatasetProvenance` below — not yet built.
 - **Fetch is parameterized by the source's registered query parameters** — the fetch
   request carries only a dataset `name` + a `Map<String,String> queryParameters` (values
   for the source's registered params). There are **no dedicated start/end date fields**:
@@ -85,8 +102,9 @@ backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
 
 Planned work lives in the **"Master Thesis" GitHub Project (v2)** on github.com
 (`RadoSlav220/Master-Thesis`), as epics with sub-issues (Status/Priority/Size fields).
-Notable next-up epics: real external API fetch (replace the mock), Flyway migrations
-(replace `ddl-auto`), authentication & authorization, and a Dashboard enhancement.
+Notable next-up epics: real external API fetch (replace the mock), authentication &
+authorization, a Dashboard enhancement, and a `DATABASE` data-source type. Flyway
+migrations are backlog but **lowest priority** (see Persistence above).
 To interact with this repo's GitHub via `gh`, use `GH_HOST=github.com` (the CLI is also
 logged into github.tools.sap, which is the default host).
 
