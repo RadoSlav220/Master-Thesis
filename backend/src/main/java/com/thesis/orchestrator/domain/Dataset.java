@@ -56,7 +56,7 @@ public class Dataset {
 
     /** Where this dataset came from (UPLOAD, API, DATABASE); drives the provenance shape. */
     @Enumerated(EnumType.STRING)
-    @Column
+    @Column(nullable = false)
     private DatasetOrigin datasetOrigin;
 
     /** Origin-specific provenance detail as JSON (see DatasetProvenance); null if unknown. */

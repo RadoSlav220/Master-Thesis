@@ -19,7 +19,7 @@ export interface Dataset {
   datasetType: string | null;
   analysisResult: string | null;
   sourceId: string | null;
-  datasetOrigin: DatasetOrigin | null;
+  datasetOrigin: DatasetOrigin;
   provenance: DatasetProvenance | null;
   createdAt: string;
 }

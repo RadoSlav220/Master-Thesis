@@ -36,6 +36,7 @@ export default function Datasets() {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Type</TableCell>
+                <TableCell>Origin</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Created</TableCell>
               </TableRow>
@@ -50,13 +51,14 @@ export default function Datasets() {
                 >
                   <TableCell>{d.name}</TableCell>
                   <TableCell>{d.type}</TableCell>
+                  <TableCell>{d.datasetOrigin}</TableCell>
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                 </TableRow>
               ))}
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     No datasets yet.
                   </TableCell>
                 </TableRow>
