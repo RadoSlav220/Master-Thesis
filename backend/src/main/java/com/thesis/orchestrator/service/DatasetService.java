@@ -9,6 +9,7 @@ import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.exception.DatasetAnalysisException;
 import com.thesis.orchestrator.exception.InvalidUploadException;
 import com.thesis.orchestrator.exception.NotFoundException;
@@ -53,7 +54,7 @@ public class DatasetService {
      * from the filename extension. GeoJSON gets a fast structural pre-check (must be a
      * FeatureCollection); the raw content is stored verbatim. The upload then runs the
      * same analyze + persist step as a fetched snapshot. Malformed content (the analysis
-     * service returns 4xx -> {@link InvalidDataException}) fails the upload and stores
+     * service returns 4xx -> InvalidDataException) fails the upload and stores
      * nothing; a transient analysis-service outage is tolerated (the dataset is still
      * stored, with null analysis).
      */
@@ -98,6 +99,18 @@ public class DatasetService {
 
     public DatasetResponse getById(UUID id) {
         return DatasetResponse.from(findEntity(id));
+    }
+
+    /** Updates a dataset's editable metadata (name, description). Content and provenance are immutable. */
+    public DatasetResponse update(UUID id, DatasetUpdateRequest request) {
+        Dataset dataset = findEntity(id);
+        dataset.setName(request.name());
+        dataset.setDescription(request.description());
+        return DatasetResponse.from(datasetRepository.save(dataset));
+    }
+
+    public void delete(UUID id) {
+        datasetRepository.delete(findEntity(id));
     }
 
     /** Returns the raw GeoJSON FeatureCollection stored for a dataset. */

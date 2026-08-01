@@ -7,36 +7,48 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import { useState } from "react";
-import { useCreateComponent } from "../../hooks/useComponents";
+import { useEffect, useState } from "react";
+import { useCreateComponent, useUpdateComponent } from "../../hooks/useComponents";
+import type { Component } from "../../types";
 
-export default function ComponentForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface ComponentFormProps {
+  open: boolean;
+  onClose: () => void;
+  component?: Component | null;
+}
+
+export default function ComponentForm({ open, onClose, component }: ComponentFormProps) {
   const [name, setName] = useState("");
   const [endpointUrl, setEndpointUrl] = useState("");
   const [description, setDescription] = useState("");
   const create = useCreateComponent();
+  const update = useUpdateComponent();
 
-  const reset = () => {
-    setName("");
-    setEndpointUrl("");
-    setDescription("");
-  };
+  const isEdit = !!component;
+  const pending = create.isPending || update.isPending;
+
+  // Prefill from the entity when editing (and each time the dialog opens for it).
+  useEffect(() => {
+    if (open) {
+      setName(component?.name ?? "");
+      setEndpointUrl(component?.endpointUrl ?? "");
+      setDescription(component?.description ?? "");
+    }
+  }, [open, component]);
 
   const handleSubmit = () => {
-    create.mutate(
-      { name, endpointUrl, description: description || undefined },
-      {
-        onSuccess: () => {
-          reset();
-          onClose();
-        },
-      },
-    );
+    const payload = { name, endpointUrl, description: description || undefined };
+    const onSuccess = () => onClose();
+    if (isEdit) {
+      update.mutate({ id: component.id, payload }, { onSuccess });
+    } else {
+      create.mutate(payload, { onSuccess });
+    }
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Register Component</DialogTitle>
+      <DialogTitle>{isEdit ? "Edit Component" : "Register Component"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required fullWidth />
@@ -63,9 +75,9 @@ export default function ComponentForm({ open, onClose }: { open: boolean; onClos
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!name || !endpointUrl || create.isPending}
+          disabled={!name || !endpointUrl || pending}
         >
-          Register
+          {isEdit ? "Save" : "Register"}
         </Button>
       </DialogActions>
     </Dialog>

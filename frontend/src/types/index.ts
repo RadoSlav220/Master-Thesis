@@ -30,6 +30,11 @@ export interface CreateDatasetRequest {
   description?: string;
 }
 
+export interface UpdateDatasetRequest {
+  name: string;
+  description?: string;
+}
+
 export interface FetchDatasetRequest {
   name: string;
   queryParameters?: Record<string, string>;

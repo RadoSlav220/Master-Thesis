@@ -113,8 +113,15 @@ public class ExecutionService {
     }
 
     public ExecutionResponse getById(UUID id) {
-        Execution execution = executionRepository.findById(id)
+        return ExecutionResponse.from(findEntity(id));
+    }
+
+    public void delete(UUID id) {
+        executionRepository.delete(findEntity(id));
+    }
+
+    private Execution findEntity(UUID id) {
+        return executionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Execution not found: " + id));
-        return ExecutionResponse.from(execution);
     }
 }

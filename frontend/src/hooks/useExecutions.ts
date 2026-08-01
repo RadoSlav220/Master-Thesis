@@ -23,3 +23,11 @@ export function useCreateExecution() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useDeleteExecution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => executionApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
