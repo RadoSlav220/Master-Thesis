@@ -9,6 +9,7 @@ import {
   Divider,
   FormControlLabel,
   FormGroup,
+  IconButton,
   MenuItem,
   Paper,
   Stack,
@@ -21,21 +22,24 @@ import {
   Typography,
 } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useMemo, useState } from "react";
 import PageHeader from "../components/common/PageHeader";
 import StatusChip from "../components/common/StatusChip";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import JsonViewer from "../components/common/JsonViewer";
 import { useDatasets } from "../hooks/useDatasets";
 import { useComponents } from "../hooks/useComponents";
-import { useCreateExecution, useExecutions } from "../hooks/useExecutions";
+import { useCreateExecution, useDeleteExecution, useExecutions } from "../hooks/useExecutions";
 import { useSelectionStore } from "../store/selectionStore";
-import type { FilterSpec } from "../types";
+import type { Execution, FilterSpec } from "../types";
 
 export default function Executions() {
   const datasets = useDatasets();
   const components = useComponents();
   const executions = useExecutions();
   const createExecution = useCreateExecution();
+  const deleteExecution = useDeleteExecution();
 
   const {
     selectedDatasetId,
@@ -49,6 +53,19 @@ export default function Executions() {
   // Filter state: which columns/properties are selected, and an optional row limit.
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [limit, setLimit] = useState<string>("");
+  const [toDelete, setToDelete] = useState<Execution | null>(null);
+
+  const confirmDelete = () => {
+    if (!toDelete) return;
+    const deletedId = toDelete.id;
+    deleteExecution.mutate(deletedId, {
+      onSuccess: () => {
+        // Clear the detail pane if the currently selected execution was deleted.
+        if (selectedExecutionId === deletedId) setSelectedExecution(null);
+        setToDelete(null);
+      },
+    });
+  };
 
   const selected = executions.data?.find((e) => e.id === selectedExecutionId) ?? null;
   const selectedDataset = datasets.data?.find((d) => d.id === selectedDatasetId) ?? null;
@@ -204,6 +221,7 @@ export default function Executions() {
                 <TableCell>Status</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Finished</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -221,11 +239,23 @@ export default function Executions() {
                   </TableCell>
                   <TableCell>{new Date(e.createdAt).toLocaleString()}</TableCell>
                   <TableCell>{e.finishedAt ? new Date(e.finishedAt).toLocaleString() : "—"}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      aria-label="delete execution"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setToDelete(e);
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
               {executions.data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     No executions yet.
                   </TableCell>
                 </TableRow>
@@ -253,6 +283,15 @@ export default function Executions() {
           <JsonViewer json={selected.result} />
         </Box>
       )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Delete execution"
+        message={`Delete execution ${toDelete?.id.slice(0, 8)}…? This removes the run record and its result.`}
+        pending={deleteExecution.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }
