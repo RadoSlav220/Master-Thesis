@@ -1,6 +1,7 @@
 import {
   Alert,
   CircularProgress,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -9,14 +10,24 @@ import {
   TableRow,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
 import PageHeader from "../components/common/PageHeader";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import ComponentForm from "../components/forms/ComponentForm";
-import { useComponents } from "../hooks/useComponents";
+import { useComponents, useDeleteComponent } from "../hooks/useComponents";
+import type { Component } from "../types";
 
 export default function Components() {
   const [open, setOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Component | null>(null);
   const { data, isLoading, isError } = useComponents();
+  const del = useDeleteComponent();
+
+  const confirmDelete = () => {
+    if (!toDelete) return;
+    del.mutate(toDelete.id, { onSuccess: () => setToDelete(null) });
+  };
 
   return (
     <>
@@ -34,6 +45,7 @@ export default function Components() {
                 <TableCell>Name</TableCell>
                 <TableCell>Endpoint URL</TableCell>
                 <TableCell>Description</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -42,11 +54,20 @@ export default function Components() {
                   <TableCell>{c.name}</TableCell>
                   <TableCell>{c.endpointUrl}</TableCell>
                   <TableCell>{c.description ?? "—"}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      aria-label="delete component"
+                      onClick={() => setToDelete(c)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">
+                  <TableCell colSpan={4} align="center">
                     No components yet.
                   </TableCell>
                 </TableRow>
@@ -56,6 +77,14 @@ export default function Components() {
         </Paper>
       )}
       <ComponentForm open={open} onClose={() => setOpen(false)} />
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Delete component"
+        message={`Delete "${toDelete?.name}"? Existing executions that used it are kept but will reference a component that no longer exists.`}
+        pending={del.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }

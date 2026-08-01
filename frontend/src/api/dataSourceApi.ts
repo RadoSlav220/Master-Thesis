@@ -23,4 +23,7 @@ export const dataSourceApi = {
     const { data } = await apiClient.post<Dataset>(`/data-sources/${id}/fetch`, payload);
     return data;
   },
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/data-sources/${id}`);
+  },
 };

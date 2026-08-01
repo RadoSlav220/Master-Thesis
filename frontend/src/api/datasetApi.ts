@@ -32,4 +32,7 @@ export const datasetApi = {
     const { data } = await apiClient.post<DatasetAnalysis>(`/datasets/${id}/analyze`);
     return data;
   },
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/datasets/${id}`);
+  },
 };

@@ -63,6 +63,16 @@ public class DataSourceService {
         return DataSourceResponse.from(findEntity(id));
     }
 
+    /**
+     * Deletes a data source. Datasets previously fetched from it are left untouched
+     * (their {@code sourceId} becomes a dangling reference) — fetched snapshots are
+     * immutable and stand on their own. The source's query-parameter definitions
+     * (element collection) are removed with it by the JPA lifecycle.
+     */
+    public void delete(UUID id) {
+        dataSourceRepository.delete(findEntity(id));
+    }
+
     private List<QueryParameterDefinition> toDefinitions(List<QueryParameter> params) {
         if (params == null) {
             return new ArrayList<>();

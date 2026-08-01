@@ -15,3 +15,11 @@ export function useCreateComponent() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useDeleteComponent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => componentApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}

@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   CircularProgress,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -11,19 +12,28 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
 import PageHeader from "../components/common/PageHeader";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import DataSourceDetails from "../components/common/DataSourceDetails";
 import DataSourceForm from "../components/forms/DataSourceForm";
 import FetchDatasetForm from "../components/forms/FetchDatasetForm";
-import { useDataSources } from "../hooks/useDataSources";
+import { useDataSources, useDeleteDataSource } from "../hooks/useDataSources";
 import type { DataSource } from "../types";
 
 export default function DataSources() {
   const [open, setOpen] = useState(false);
   const [fetchSource, setFetchSource] = useState<DataSource | null>(null);
   const [detailsSource, setDetailsSource] = useState<DataSource | null>(null);
+  const [toDelete, setToDelete] = useState<DataSource | null>(null);
   const { data, isLoading, isError } = useDataSources();
+  const del = useDeleteDataSource();
+
+  const confirmDelete = () => {
+    if (!toDelete) return;
+    del.mutate(toDelete.id, { onSuccess: () => setToDelete(null) });
+  };
 
   return (
     <>
@@ -70,6 +80,16 @@ export default function DataSources() {
                     >
                       Fetch
                     </Button>
+                    <IconButton
+                      size="small"
+                      aria-label="delete data source"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setToDelete(s);
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -95,6 +115,14 @@ export default function DataSources() {
         source={fetchSource}
         open={!!fetchSource}
         onClose={() => setFetchSource(null)}
+      />
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Delete data source"
+        message={`Delete "${toDelete?.name}"? Datasets already fetched from it are kept — they remain as standalone snapshots.`}
+        pending={del.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setToDelete(null)}
       />
     </>
   );

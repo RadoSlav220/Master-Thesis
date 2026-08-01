@@ -6,6 +6,7 @@ import com.thesis.orchestrator.service.ComponentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,5 +39,11 @@ public class ComponentController {
     @GetMapping("/{id}")
     public ComponentResponse getById(@PathVariable UUID id) {
         return componentService.getById(id);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID id) {
+        componentService.delete(id);
     }
 }

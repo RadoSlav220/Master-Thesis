@@ -46,3 +46,11 @@ export function useAnalyzeDataset() {
     mutationFn: (id: string) => datasetApi.analyze(id),
   });
 }
+
+export function useDeleteDataset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => datasetApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}

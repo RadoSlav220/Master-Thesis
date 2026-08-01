@@ -35,8 +35,15 @@ public class ComponentService {
     }
 
     public ComponentResponse getById(UUID id) {
-        Component component = componentRepository.findById(id)
+        return ComponentResponse.from(findEntity(id));
+    }
+
+    public void delete(UUID id) {
+        componentRepository.delete(findEntity(id));
+    }
+
+    private Component findEntity(UUID id) {
+        return componentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Component not found: " + id));
-        return ComponentResponse.from(component);
     }
 }

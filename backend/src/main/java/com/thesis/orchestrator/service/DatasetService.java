@@ -74,6 +74,10 @@ public class DatasetService {
         return DatasetResponse.from(findEntity(id));
     }
 
+    public void delete(UUID id) {
+        datasetRepository.delete(findEntity(id));
+    }
+
     /** Returns the raw GeoJSON FeatureCollection stored for a dataset. */
     public String getGeoJson(UUID id) {
         Dataset dataset = findEntity(id);

@@ -1,6 +1,7 @@
 import {
   Alert,
   CircularProgress,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -9,16 +10,26 @@ import {
   TableRow,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/common/PageHeader";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import DatasetForm from "../components/forms/DatasetForm";
-import { useDatasets } from "../hooks/useDatasets";
+import { useDatasets, useDeleteDataset } from "../hooks/useDatasets";
+import type { Dataset } from "../types";
 
 export default function Datasets() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Dataset | null>(null);
   const { data, isLoading, isError } = useDatasets();
+  const del = useDeleteDataset();
   const navigate = useNavigate();
+
+  const confirmDelete = () => {
+    if (!toDelete) return;
+    del.mutate(toDelete.id, { onSuccess: () => setToDelete(null) });
+  };
 
   return (
     <>
@@ -39,6 +50,7 @@ export default function Datasets() {
                 <TableCell>Origin</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Created</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -54,11 +66,23 @@ export default function Datasets() {
                   <TableCell>{d.datasetOrigin}</TableCell>
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      aria-label="delete dataset"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setToDelete(d);
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     No datasets yet.
                   </TableCell>
                 </TableRow>
@@ -68,6 +92,14 @@ export default function Datasets() {
         </Paper>
       )}
       <DatasetForm open={createOpen} onClose={() => setCreateOpen(false)} />
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Delete dataset"
+        message={`Delete "${toDelete?.name}"? Existing executions that used it are kept but will reference a dataset that no longer exists.`}
+        pending={del.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }
