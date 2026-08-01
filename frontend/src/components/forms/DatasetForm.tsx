@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { isAxiosError } from "axios";
 import { useState } from "react";
 import { useUploadDataset } from "../../hooks/useDatasets";
 import type { DatasetType } from "../../types";
@@ -21,6 +22,21 @@ const ACCEPT: Record<DatasetType, string> = {
   CSV: ".csv,text/csv",
   GEOJSON: ".geojson,application/geo+json,application/json",
 };
+
+const FALLBACK_UPLOAD_ERROR =
+  "Upload failed — the file may be malformed or not match the selected type.";
+
+/**
+ * Prefers the backend's ProblemDetail message (e.g. the analysis service's reason
+ * a file is malformed), falling back to a generic hint covering both likely causes.
+ */
+function uploadErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: string } | undefined)?.detail;
+    if (detail) return `Upload failed — ${detail}`;
+  }
+  return FALLBACK_UPLOAD_ERROR;
+}
 
 export default function DatasetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
@@ -98,7 +114,7 @@ export default function DatasetForm({ open, onClose }: { open: boolean; onClose:
           )}
           {upload.isError && (
             <Alert severity="error">
-              Upload failed — check that the file matches the selected type.
+              {uploadErrorMessage(upload.error)}
             </Alert>
           )}
         </Stack>
