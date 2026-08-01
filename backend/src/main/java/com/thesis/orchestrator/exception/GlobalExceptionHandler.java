@@ -16,8 +16,8 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(InvalidGeoJsonException.class)
-    public ProblemDetail handleInvalidGeoJson(InvalidGeoJsonException ex) {
+    @ExceptionHandler(InvalidUploadException.class)
+    public ProblemDetail handleInvalidUpload(InvalidUploadException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
