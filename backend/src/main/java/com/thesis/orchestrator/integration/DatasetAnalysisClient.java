@@ -1,7 +1,10 @@
 package com.thesis.orchestrator.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.exception.DatasetAnalysisException;
+import com.thesis.orchestrator.exception.InvalidDataException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
@@ -13,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +28,8 @@ import java.nio.charset.StandardCharsets;
  */
 @Component
 public class DatasetAnalysisClient {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient restClient;
     private final String serviceUrl;
@@ -60,9 +66,33 @@ public class DatasetAnalysisClient {
                     .body(body)
                     .retrieve()
                     .body(DatasetAnalysisResponse.class);
+        } catch (RestClientResponseException ex) {
+            // A 4xx means the service rejected the content as malformed — bad data,
+            // not an outage. Surface it as InvalidDataException (-> 400) so callers
+            // can fail dataset creation. Any other status is treated as a service failure.
+            if (ex.getStatusCode().is4xxClientError()) {
+                throw new InvalidDataException("Dataset content is invalid: " + detailOf(ex));
+            }
+            throw new DatasetAnalysisException(
+                    "Dataset analysis service call failed: " + ex.getMessage(), ex);
         } catch (Exception ex) {
             throw new DatasetAnalysisException(
                     "Dataset analysis service call failed: " + ex.getMessage(), ex);
         }
+    }
+
+    /** Extracts the FastAPI {@code {"detail": ...}} message, falling back to the raw body. */
+    private String detailOf(RestClientResponseException ex) {
+        try {
+            JsonNode body = OBJECT_MAPPER.readTree(ex.getResponseBodyAsString());
+            JsonNode detail = body.get("detail");
+            if (detail != null && !detail.isNull()) {
+                return detail.asText();
+            }
+        } catch (Exception ignored) {
+            // fall through to the raw body
+        }
+        String raw = ex.getResponseBodyAsString();
+        return raw.isBlank() ? ex.getMessage() : raw;
     }
 }

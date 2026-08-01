@@ -11,11 +11,32 @@ import {
   Typography,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { isAxiosError } from "axios";
 import { useEffect, useState } from "react";
-import { useCreateDataset, useUpdateDataset, useUploadDataset } from "../../hooks/useDatasets";
+import { useUpdateDataset, useUploadDataset } from "../../hooks/useDatasets";
 import type { Dataset, DatasetType } from "../../types";
 
 const TYPES: DatasetType[] = ["CSV", "GEOJSON"];
+
+const ACCEPT: Record<DatasetType, string> = {
+  CSV: ".csv,text/csv",
+  GEOJSON: ".geojson,application/geo+json,application/json",
+};
+
+const FALLBACK_UPLOAD_ERROR =
+  "Upload failed — the file may be malformed or not match the selected type.";
+
+/**
+ * Prefers the backend's ProblemDetail message (e.g. the analysis service's reason
+ * a file is malformed), falling back to a generic hint covering both likely causes.
+ */
+function uploadErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: string } | undefined)?.detail;
+    if (detail) return `Upload failed — ${detail}`;
+  }
+  return FALLBACK_UPLOAD_ERROR;
+}
 
 interface DatasetFormProps {
   open: boolean;
@@ -28,15 +49,13 @@ export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps
   const [type, setType] = useState<DatasetType>("CSV");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const create = useCreateDataset();
   const upload = useUploadDataset();
   const update = useUpdateDataset();
 
   const isEdit = !!dataset;
-  const isGeoJson = type === "GEOJSON";
-  const pending = create.isPending || upload.isPending || update.isPending;
-  // In edit mode only metadata (name/description) applies; create needs a file for GeoJSON.
-  const canSubmit = !!name && (isEdit || !isGeoJson || !!file) && !pending;
+  const pending = upload.isPending || update.isPending;
+  // In edit mode only metadata (name/description) applies; creating requires a file.
+  const canSubmit = !!name && (isEdit || !!file) && !pending;
 
   // Prefill from the entity when editing (and each time the dialog opens).
   useEffect(() => {
@@ -56,11 +75,9 @@ export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps
         { id: dataset.id, payload: { name, description: description || undefined } },
         { onSuccess },
       );
-    } else if (isGeoJson) {
+    } else {
       if (!file) return;
       upload.mutate({ file, name, description: description || undefined }, { onSuccess });
-    } else {
-      create.mutate({ name, type, description: description || undefined }, { onSuccess });
     }
   };
 
@@ -96,13 +113,13 @@ export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps
             minRows={2}
             fullWidth
           />
-          {!isEdit && isGeoJson && (
+          {!isEdit && (
             <>
               <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
-                {file ? file.name : "Choose .geojson file"}
+                {file ? file.name : `Choose ${type === "CSV" ? ".csv" : ".geojson"} file`}
                 <input
                   type="file"
-                  accept=".geojson,application/geo+json,application/json"
+                  accept={ACCEPT[type]}
                   hidden
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
@@ -113,9 +130,7 @@ export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps
                 </Typography>
               )}
               {upload.isError && (
-                <Alert severity="error">
-                  Upload failed — check that the file is a valid GeoJSON FeatureCollection.
-                </Alert>
+                <Alert severity="error">{uploadErrorMessage(upload.error)}</Alert>
               )}
             </>
           )}

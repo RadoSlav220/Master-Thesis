@@ -1,0 +1,6 @@
+station,name,timestamp,pm25,pm10,no2,temperature,humidity
+SOF-01,Sensor Center,2026-01-15T08:00:00Z,42.5,68.1,31.2,-2.4,78
+SOF-02,Sensor Lozenets,2026-01-15T08:00:00Z,29.7,51.4,22.5
+SOF-03,Sensor Mladost,2026-01-15T08:00:00Z,55.2,88.3,40.1,-2.9,83,EXTRA,MORE
+"SOF-04,Sensor Nadezhda,2026-01-15T08:00:00Z,38.9,62.0,28.7,-3.4,84
+SOF-05,Sensor Studentski,2026-01-15T09:00:00Z,30.2,49.1,21.3,-1.3,74
