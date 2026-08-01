@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { datasetApi } from "../api/datasetApi";
-import type { CreateDatasetRequest } from "../types";
+import type { CreateDatasetRequest, UpdateDatasetRequest } from "../types";
 
 const KEY = ["datasets"];
 
@@ -51,6 +51,15 @@ export function useDeleteDataset() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => datasetApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useUpdateDataset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; payload: UpdateDatasetRequest }) =>
+      datasetApi.update(vars.id, vars.payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

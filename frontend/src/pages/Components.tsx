@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import { useState } from "react";
 import PageHeader from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -20,6 +21,7 @@ import type { Component } from "../types";
 
 export default function Components() {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Component | null>(null);
   const [toDelete, setToDelete] = useState<Component | null>(null);
   const { data, isLoading, isError } = useComponents();
   const del = useDeleteComponent();
@@ -57,6 +59,13 @@ export default function Components() {
                   <TableCell align="right">
                     <IconButton
                       size="small"
+                      aria-label="edit component"
+                      onClick={() => setEditing(c)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       aria-label="delete component"
                       onClick={() => setToDelete(c)}
                     >
@@ -77,6 +86,11 @@ export default function Components() {
         </Paper>
       )}
       <ComponentForm open={open} onClose={() => setOpen(false)} />
+      <ComponentForm
+        open={!!editing}
+        component={editing}
+        onClose={() => setEditing(null)}
+      />
       <ConfirmDialog
         open={!!toDelete}
         title="Delete component"

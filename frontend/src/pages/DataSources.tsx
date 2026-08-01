@@ -13,6 +13,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import { useState } from "react";
 import PageHeader from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -24,6 +25,7 @@ import type { DataSource } from "../types";
 
 export default function DataSources() {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<DataSource | null>(null);
   const [fetchSource, setFetchSource] = useState<DataSource | null>(null);
   const [detailsSource, setDetailsSource] = useState<DataSource | null>(null);
   const [toDelete, setToDelete] = useState<DataSource | null>(null);
@@ -82,6 +84,16 @@ export default function DataSources() {
                     </Button>
                     <IconButton
                       size="small"
+                      aria-label="edit data source"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(s);
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       aria-label="delete data source"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -105,6 +117,11 @@ export default function DataSources() {
         </Paper>
       )}
       <DataSourceForm open={open} onClose={() => setOpen(false)} />
+      <DataSourceForm
+        open={!!editing}
+        dataSource={editing}
+        onClose={() => setEditing(null)}
+      />
       <DataSourceDetails
         source={detailsSource}
         open={!!detailsSource}

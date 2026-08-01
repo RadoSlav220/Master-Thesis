@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/common/PageHeader";
@@ -21,6 +22,7 @@ import type { Dataset } from "../types";
 
 export default function Datasets() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<Dataset | null>(null);
   const [toDelete, setToDelete] = useState<Dataset | null>(null);
   const { data, isLoading, isError } = useDatasets();
   const del = useDeleteDataset();
@@ -69,6 +71,16 @@ export default function Datasets() {
                   <TableCell align="right">
                     <IconButton
                       size="small"
+                      aria-label="edit dataset"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(d);
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       aria-label="delete dataset"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -92,6 +104,7 @@ export default function Datasets() {
         </Paper>
       )}
       <DatasetForm open={createOpen} onClose={() => setCreateOpen(false)} />
+      <DatasetForm open={!!editing} dataset={editing} onClose={() => setEditing(null)} />
       <ConfirmDialog
         open={!!toDelete}
         title="Delete dataset"

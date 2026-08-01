@@ -3,6 +3,7 @@ package com.thesis.orchestrator.controller;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.service.DatasetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -69,5 +71,10 @@ public class DatasetController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
         datasetService.delete(id);
+    }
+
+    @PutMapping("/{id}")
+    public DatasetResponse update(@PathVariable UUID id, @Valid @RequestBody DatasetUpdateRequest request) {
+        return datasetService.update(id, request);
     }
 }

@@ -9,6 +9,7 @@ import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.exception.InvalidGeoJsonException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.DatasetAnalysisClient;
@@ -72,6 +73,14 @@ public class DatasetService {
 
     public DatasetResponse getById(UUID id) {
         return DatasetResponse.from(findEntity(id));
+    }
+
+    /** Updates a dataset's editable metadata (name, description). Content and provenance are immutable. */
+    public DatasetResponse update(UUID id, DatasetUpdateRequest request) {
+        Dataset dataset = findEntity(id);
+        dataset.setName(request.name());
+        dataset.setDescription(request.description());
+        return DatasetResponse.from(datasetRepository.save(dataset));
     }
 
     public void delete(UUID id) {

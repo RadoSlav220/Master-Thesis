@@ -63,6 +63,20 @@ public class DataSourceService {
         return DataSourceResponse.from(findEntity(id));
     }
 
+    public DataSourceResponse update(UUID id, DataSourceRequest request) {
+        DataSource dataSource = findEntity(id);
+        dataSource.setName(request.name());
+        dataSource.setType(request.type());
+        dataSource.setOutputFormat(request.outputFormat());
+        dataSource.setDescription(request.description());
+        // Replace the query-parameter definitions in place so Hibernate diffs the
+        // collection table rather than orphaning the old collection instance.
+        List<QueryParameterDefinition> params = dataSource.getQueryParameters();
+        params.clear();
+        params.addAll(toDefinitions(request.queryParameters()));
+        return DataSourceResponse.from(dataSourceRepository.save(dataSource));
+    }
+
     /**
      * Deletes a data source. Datasets previously fetched from it are left untouched
      * (their {@code sourceId} becomes a dangling reference) — fetched snapshots are

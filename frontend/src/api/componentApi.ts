@@ -14,6 +14,10 @@ export const componentApi = {
     const { data } = await apiClient.post<Component>("/components", payload);
     return data;
   },
+  update: async (id: string, payload: CreateComponentRequest): Promise<Component> => {
+    const { data } = await apiClient.put<Component>(`/components/${id}`, payload);
+    return data;
+  },
   remove: async (id: string): Promise<void> => {
     await apiClient.delete(`/components/${id}`);
   },

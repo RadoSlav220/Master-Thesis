@@ -1,5 +1,11 @@
 import { apiClient } from "./client";
-import type { CreateDatasetRequest, Dataset, DatasetAnalysis, GeoJsonFeatureCollection } from "../types";
+import type {
+  CreateDatasetRequest,
+  Dataset,
+  DatasetAnalysis,
+  GeoJsonFeatureCollection,
+  UpdateDatasetRequest,
+} from "../types";
 
 export const datasetApi = {
   list: async (): Promise<Dataset[]> => {
@@ -30,6 +36,10 @@ export const datasetApi = {
   },
   analyze: async (id: string): Promise<DatasetAnalysis> => {
     const { data } = await apiClient.post<DatasetAnalysis>(`/datasets/${id}/analyze`);
+    return data;
+  },
+  update: async (id: string, payload: UpdateDatasetRequest): Promise<Dataset> => {
+    const { data } = await apiClient.put<Dataset>(`/datasets/${id}`, payload);
     return data;
   },
   remove: async (id: string): Promise<void> => {

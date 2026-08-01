@@ -23,3 +23,12 @@ export function useDeleteComponent() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useUpdateComponent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; payload: CreateComponentRequest }) =>
+      componentApi.update(vars.id, vars.payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}

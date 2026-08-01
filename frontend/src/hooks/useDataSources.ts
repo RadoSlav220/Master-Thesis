@@ -24,6 +24,15 @@ export function useDeleteDataSource() {
   });
 }
 
+export function useUpdateDataSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; payload: CreateDataSourceRequest }) =>
+      dataSourceApi.update(vars.id, vars.payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
 export function useFetchDataset() {
   const qc = useQueryClient();
   return useMutation({
