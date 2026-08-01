@@ -9,6 +9,7 @@ import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.exception.DatasetAnalysisException;
 import com.thesis.orchestrator.exception.InvalidUploadException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.DatasetAnalysisClient;
@@ -51,8 +52,10 @@ public class DatasetService {
      * Creates a dataset from an uploaded file (CSV or GeoJSON). The format is derived
      * from the filename extension. GeoJSON gets a fast structural pre-check (must be a
      * FeatureCollection); the raw content is stored verbatim. The upload then runs the
-     * same analyze + persist step as a fetched snapshot — analysis failure does not fail
-     * the upload, the dataset is still stored (with null analysis).
+     * same analyze + persist step as a fetched snapshot. Malformed content (the analysis
+     * service returns 4xx -> {@link InvalidDataException}) fails the upload and stores
+     * nothing; a transient analysis-service outage is tolerated (the dataset is still
+     * stored, with null analysis).
      */
     public DatasetResponse upload(MultipartFile file, String name, String description) {
         String content = readFile(file);
@@ -70,17 +73,18 @@ public class DatasetService {
                 .provenance(serializeProvenance(new DatasetProvenance.UploadProvenance()))
                 .createdAt(Instant.now())
                 .build();
-        datasetRepository.save(dataset);
 
+        // Analyze before persisting so malformed content (InvalidDataException) aborts
+        // the upload without leaving an orphaned dataset behind.
         try {
             String filename = name + extensionFor(type);
             DatasetAnalysisResponse analysis = datasetAnalysisClient.analyze(filename, content);
             dataset.setDatasetType(analysis.datasetType());
             dataset.setAnalysisResult(objectMapper.writeValueAsString(analysis));
         } catch (JsonProcessingException ex) {
-            log.warn("Could not serialize analysis for uploaded dataset {}: {}", dataset.getId(), ex.getMessage());
-        } catch (Exception ex) {
-            log.warn("Analysis failed for uploaded dataset {}: {}", dataset.getId(), ex.getMessage());
+            log.warn("Could not serialize analysis for uploaded dataset {}: {}", name, ex.getMessage());
+        } catch (DatasetAnalysisException ex) {
+            log.warn("Analysis service unavailable for uploaded dataset {}: {}", name, ex.getMessage());
         }
 
         return DatasetResponse.from(datasetRepository.save(dataset));

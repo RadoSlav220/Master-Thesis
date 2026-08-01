@@ -13,6 +13,7 @@ import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.dto.FetchDatasetRequest;
 import com.thesis.orchestrator.dto.QueryParameter;
+import com.thesis.orchestrator.exception.DatasetAnalysisException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.DataSourceFetcher;
 import com.thesis.orchestrator.integration.DatasetAnalysisClient;
@@ -83,10 +84,11 @@ public class DataSourceService {
 
     /**
      * Fetches a dataset snapshot from a data source using the supplied query-parameter
-     * values (the source's registered parameters, populated by the caller), stores it,
-     * then runs analysis once and persists the result. The fetched snapshot is
-     * immutable, so caching its analysis is safe. Analysis failure does not fail the
-     * fetch — the dataset is still stored (with null analysis).
+     * values (the source's registered parameters, populated by the caller), then runs
+     * analysis once and persists it alongside the snapshot. The fetched snapshot is
+     * immutable, so caching its analysis is safe. Malformed content (the analysis service
+     * returns 4xx -> InvalidDataException) fails the fetch and stores nothing; a transient
+     * analysis-service outage is tolerated (the snapshot is still stored, with null analysis).
      */
     public DatasetResponse fetch(UUID sourceId, FetchDatasetRequest request) {
         DataSource source = findEntity(sourceId);
@@ -104,17 +106,18 @@ public class DataSourceService {
                 .provenance(serializeFetchProvenance(new DatasetProvenance.ApiProvenance(request.queryParameters())))
                 .createdAt(Instant.now())
                 .build();
-        datasetRepository.save(dataset);
 
+        // Analyze before persisting so malformed content (InvalidDataException) aborts
+        // the fetch without leaving an orphaned snapshot behind.
         try {
             String filename = request.name() + DatasetService.extensionFor(format);
             DatasetAnalysisResponse analysis = datasetAnalysisClient.analyze(filename, content);
             dataset.setDatasetType(analysis.datasetType());
             dataset.setAnalysisResult(objectMapper.writeValueAsString(analysis));
         } catch (JsonProcessingException ex) {
-            log.warn("Could not serialize analysis for fetched dataset {}: {}", dataset.getId(), ex.getMessage());
-        } catch (Exception ex) {
-            log.warn("Analysis failed for fetched dataset {}: {}", dataset.getId(), ex.getMessage());
+            log.warn("Could not serialize analysis for fetched dataset {}: {}", request.name(), ex.getMessage());
+        } catch (DatasetAnalysisException ex) {
+            log.warn("Analysis service unavailable for fetched dataset {}: {}", request.name(), ex.getMessage());
         }
 
         return DatasetResponse.from(datasetRepository.save(dataset));
