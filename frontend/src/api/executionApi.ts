@@ -14,4 +14,7 @@ export const executionApi = {
     const { data } = await apiClient.post<Execution>("/executions", payload);
     return data;
   },
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/executions/${id}`);
+  },
 };

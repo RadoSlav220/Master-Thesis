@@ -11,38 +11,52 @@ import {
   Typography,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { useState } from "react";
-import { useCreateDataset, useUploadDataset } from "../../hooks/useDatasets";
-import type { DatasetType } from "../../types";
+import { useEffect, useState } from "react";
+import { useCreateDataset, useUpdateDataset, useUploadDataset } from "../../hooks/useDatasets";
+import type { Dataset, DatasetType } from "../../types";
 
 const TYPES: DatasetType[] = ["CSV", "GEOJSON"];
 
-export default function DatasetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface DatasetFormProps {
+  open: boolean;
+  onClose: () => void;
+  dataset?: Dataset | null;
+}
+
+export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<DatasetType>("CSV");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const create = useCreateDataset();
   const upload = useUploadDataset();
+  const update = useUpdateDataset();
 
+  const isEdit = !!dataset;
   const isGeoJson = type === "GEOJSON";
-  const pending = create.isPending || upload.isPending;
-  const canSubmit = !!name && (!isGeoJson || !!file) && !pending;
+  const pending = create.isPending || upload.isPending || update.isPending;
+  // In edit mode only metadata (name/description) applies; create needs a file for GeoJSON.
+  const canSubmit = !!name && (isEdit || !isGeoJson || !!file) && !pending;
 
-  const reset = () => {
-    setName("");
-    setType("CSV");
-    setDescription("");
-    setFile(null);
-  };
+  // Prefill from the entity when editing (and each time the dialog opens).
+  useEffect(() => {
+    if (open) {
+      setName(dataset?.name ?? "");
+      setType((dataset?.type as DatasetType) ?? "CSV");
+      setDescription(dataset?.description ?? "");
+      setFile(null);
+    }
+  }, [open, dataset]);
 
   const handleSubmit = () => {
     if (!name) return;
-    const onSuccess = () => {
-      reset();
-      onClose();
-    };
-    if (isGeoJson) {
+    const onSuccess = () => onClose();
+    if (isEdit) {
+      update.mutate(
+        { id: dataset.id, payload: { name, description: description || undefined } },
+        { onSuccess },
+      );
+    } else if (isGeoJson) {
       if (!file) return;
       upload.mutate({ file, name, description: description || undefined }, { onSuccess });
     } else {
@@ -52,26 +66,28 @@ export default function DatasetForm({ open, onClose }: { open: boolean; onClose:
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Create Dataset</DialogTitle>
+      <DialogTitle>{isEdit ? "Edit Dataset" : "Create Dataset"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required fullWidth />
-          <TextField
-            select
-            label="Type"
-            value={type}
-            onChange={(e) => {
-              setType(e.target.value as DatasetType);
-              setFile(null);
-            }}
-            fullWidth
-          >
-            {TYPES.map((t) => (
-              <MenuItem key={t} value={t}>
-                {t}
-              </MenuItem>
-            ))}
-          </TextField>
+          {!isEdit && (
+            <TextField
+              select
+              label="Type"
+              value={type}
+              onChange={(e) => {
+                setType(e.target.value as DatasetType);
+                setFile(null);
+              }}
+              fullWidth
+            >
+              {TYPES.map((t) => (
+                <MenuItem key={t} value={t}>
+                  {t}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <TextField
             label="Description"
             value={description}
@@ -80,7 +96,7 @@ export default function DatasetForm({ open, onClose }: { open: boolean; onClose:
             minRows={2}
             fullWidth
           />
-          {isGeoJson && (
+          {!isEdit && isGeoJson && (
             <>
               <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
                 {file ? file.name : "Choose .geojson file"}
@@ -108,7 +124,7 @@ export default function DatasetForm({ open, onClose }: { open: boolean; onClose:
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit}>
-          Create
+          {isEdit ? "Save" : "Create"}
         </Button>
       </DialogActions>
     </Dialog>

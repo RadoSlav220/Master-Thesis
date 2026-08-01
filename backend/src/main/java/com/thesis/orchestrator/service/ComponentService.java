@@ -35,8 +35,25 @@ public class ComponentService {
     }
 
     public ComponentResponse getById(UUID id) {
-        Component component = componentRepository.findById(id)
+        return ComponentResponse.from(findEntity(id));
+    }
+
+    public ComponentResponse update(UUID id, ComponentRequest request) {
+        Component component = findEntity(id);
+        component.setName(request.name());
+        component.setEndpointUrl(request.endpointUrl());
+        component.setInputSchema(request.inputSchema());
+        component.setOutputSchema(request.outputSchema());
+        component.setDescription(request.description());
+        return ComponentResponse.from(componentRepository.save(component));
+    }
+
+    public void delete(UUID id) {
+        componentRepository.delete(findEntity(id));
+    }
+
+    private Component findEntity(UUID id) {
+        return componentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Component not found: " + id));
-        return ComponentResponse.from(component);
     }
 }

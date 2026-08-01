@@ -15,9 +15,14 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { useState } from "react";
-import { useCreateDataSource } from "../../hooks/useDataSources";
-import type { DataSourceOutputFormat, DataSourceType, QueryParameter } from "../../types";
+import { useEffect, useState } from "react";
+import { useCreateDataSource, useUpdateDataSource } from "../../hooks/useDataSources";
+import type {
+  DataSource,
+  DataSourceOutputFormat,
+  DataSourceType,
+  QueryParameter,
+} from "../../types";
 
 const TYPES: { value: DataSourceType; label: string }[] = [
   { value: "API", label: "API" },
@@ -25,21 +30,40 @@ const TYPES: { value: DataSourceType; label: string }[] = [
 
 const OUTPUT_FORMATS: DataSourceOutputFormat[] = ["CSV", "GEOJSON"];
 
-export default function DataSourceForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface DataSourceFormProps {
+  open: boolean;
+  onClose: () => void;
+  dataSource?: DataSource | null;
+}
+
+export default function DataSourceForm({ open, onClose, dataSource }: DataSourceFormProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<DataSourceType>("API");
   const [outputFormat, setOutputFormat] = useState<DataSourceOutputFormat>("GEOJSON");
   const [description, setDescription] = useState("");
   const [params, setParams] = useState<QueryParameter[]>([]);
   const create = useCreateDataSource();
+  const update = useUpdateDataSource();
 
-  const reset = () => {
-    setName("");
-    setType("API");
-    setOutputFormat("GEOJSON");
-    setDescription("");
-    setParams([]);
-  };
+  const isEdit = !!dataSource;
+  const pending = create.isPending || update.isPending;
+
+  // Prefill from the entity when editing (and each time the dialog opens for it).
+  useEffect(() => {
+    if (open) {
+      setName(dataSource?.name ?? "");
+      setType((dataSource?.type as DataSourceType) ?? "API");
+      setOutputFormat((dataSource?.outputFormat as DataSourceOutputFormat) ?? "GEOJSON");
+      setDescription(dataSource?.description ?? "");
+      setParams(
+        (dataSource?.queryParameters ?? []).map((p) => ({
+          name: p.name,
+          required: p.required,
+          defaultValue: p.defaultValue ?? "",
+        })),
+      );
+    }
+  }, [open, dataSource]);
 
   const addParam = () => setParams((prev) => [...prev, { name: "", required: false, defaultValue: "" }]);
 
@@ -57,26 +81,24 @@ export default function DataSourceForm({ open, onClose }: { open: boolean; onClo
         required: p.required,
         defaultValue: p.defaultValue?.trim() ? p.defaultValue.trim() : undefined,
       }));
-    create.mutate(
-      {
-        name,
-        type,
-        outputFormat,
-        description: description || undefined,
-        queryParameters: queryParameters.length ? queryParameters : undefined,
-      },
-      {
-        onSuccess: () => {
-          reset();
-          onClose();
-        },
-      },
-    );
+    const payload = {
+      name,
+      type,
+      outputFormat,
+      description: description || undefined,
+      queryParameters: queryParameters.length ? queryParameters : undefined,
+    };
+    const onSuccess = () => onClose();
+    if (isEdit) {
+      update.mutate({ id: dataSource.id, payload }, { onSuccess });
+    } else {
+      create.mutate(payload, { onSuccess });
+    }
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Register Data Source</DialogTitle>
+      <DialogTitle>{isEdit ? "Edit Data Source" : "Register Data Source"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required fullWidth />
@@ -163,8 +185,8 @@ export default function DataSourceForm({ open, onClose }: { open: boolean; onClo
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={!name || create.isPending}>
-          Register
+        <Button variant="contained" onClick={handleSubmit} disabled={!name || pending}>
+          {isEdit ? "Save" : "Register"}
         </Button>
       </DialogActions>
     </Dialog>
