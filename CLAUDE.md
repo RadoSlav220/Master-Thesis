@@ -20,9 +20,14 @@ and the reasoning behind key decisions.
 - `frontend/` — React + TypeScript (Vite; nginx in Docker). MUI, Axios, TanStack React
   Query, Zustand, React Router, MapLibre GL JS, Recharts.
 - `data-analysis-service/` — Python 3.12 FastAPI + Pandas microservice (structure
-  analysis + filtering). Uses ruff + pytest; CI runs both.
+  analysis + filtering). Uses ruff + pytest.
 - `docker-compose.yml` (postgres + backend + frontend + data-analysis-service),
   `.env.example`, `sample-data/` (Sofia GeoJSON samples).
+- Each subproject has its **own `.gitignore`** (language/build rules); the root
+  `.gitignore` holds only cross-cutting rules (OS/editor/env/secrets).
+- **CI** (`.github/workflows/build.yml`) runs three jobs on push: `build-backend`
+  (`mvn package`), `build-frontend` (lint + build), `build-analysis-service`
+  (ruff + pytest).
 
 ## The pipeline (the thesis story)
 
@@ -44,11 +49,41 @@ models are **mocked** for now.
 - **Dataset storage** — one generic `content` column (formerly `geoJsonContent`). A
   fetched dataset also stores `datasetType`, a persisted `analysisResult`, and `sourceId`
   (provenance). Fetched snapshots are immutable, so caching their analysis is safe.
-- **Persistence** — Hibernate `ddl-auto: update`. Known limitations already encountered:
-  it cannot add NOT NULL columns to populated tables, and column renames leave orphaned
-  columns behind. Add new columns **nullable**. Migrating to Flyway is a planned backlog item.
-- **DataSource model** — `type` = `API` (with `DATABASE` reserved for later) + an
-  `outputFormat` of `CSV` or `GEOJSON`.
+- **Dataset origin & provenance** — a `datasetOrigin` enum (`UPLOAD`/`API`/`DATABASE`)
+  records where a dataset came from, plus a nullable `provenance` JSON column holding the
+  origin-specific detail (for `API`: the query-parameter values used at fetch time). The
+  provenance shape is a **sealed `DatasetProvenance` hierarchy** (`ApiProvenance` /
+  `DatabaseProvenance` / `UploadProvenance`) serialized with a Jackson `"type"`
+  discriminator. Chosen over per-origin nullable columns or JPA entity inheritance: the
+  differences are *data*, not *behavior*, so a discriminator enum + typed JSON blob keeps
+  the schema flat while staying type-safe in code. `sourceId` stays top-level as the
+  canonical source pointer.
+- **Persistence** — Hibernate `ddl-auto: update`. Known limitations: it cannot add NOT
+  NULL columns to populated tables, and column renames/removals leave orphaned columns
+  behind. Add new columns **nullable**. `@Enumerated(STRING)` enums get a generated CHECK
+  constraint on their column. In early dev, the local Postgres volume (`pgdata`) can just
+  be pruned to shed accumulated schema drift. Flyway/migrations are the **lowest-priority**
+  backlog item — do not design around them or treat them as a prerequisite.
+- **DataSource model** — `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
+  reserved for later) + an `outputFormat` of `CSV` or `GEOJSON`. At registration a source
+  also declares the **query parameters** its API expects (name, `required` flag, optional
+  `defaultValue`). These definitions are stored **relationally** as a
+  `@ElementCollection<QueryParameterDefinition>` (table `data_source_query_parameters`,
+  FK `data_source_id`), not a JSON blob — chosen so they're queryable and Hibernate-managed.
+  The `QueryParameter` record stays in `dto/` as the wire contract. Fetching a snapshot is
+  mocked by `DataSourceFetcher` (no real HTTP yet). Future `DATABASE` sources will need
+  type-specific config (connection/query), likely a `DataSourceConfig` sealed hierarchy
+  mirroring `DatasetProvenance` below — not yet built.
+- **Fetch is parameterized by the source's registered query parameters** — the fetch
+  request carries only a dataset `name` + a `Map<String,String> queryParameters` (values
+  for the source's registered params). There are **no dedicated start/end date fields**:
+  a time window, if a source needs one, is just registered as ordinary query parameters.
+  The frontend Fetch dialog renders one text field per registered param (prefilled with
+  its default; required ones enforced). The mock `DataSourceFetcher` derives its CSV
+  window from parseable ISO-8601 values under common keys (`startDate`/`start`/`from`,
+  `endDate`/`end`/`to`) when present, else falls back to a default last-24h window.
+  (The earlier typed `Instant` window + MUI `DateTimePicker` approach was replaced by
+  this generic query-parameter model.)
 - **Filtering (v1)** — column/property selection + row limit only (no value predicates).
   The applied filter is persisted on the execution as `filterSpec`. Filtered data feeds
   the model end-to-end for **GeoJSON**; CSV → model is deferred (mock components consume GeoJSON).
@@ -60,8 +95,18 @@ models are **mocked** for now.
 
 ## Constraints deliberately deferred (MVP scope)
 
-No authentication, PostGIS, workflow chaining, or message queues. (Auth is now a planned
+No authentication, PostGIS, workflow chaining, or message queues. (Auth is a planned
 backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
+
+## Backlog / where work is tracked
+
+Planned work lives in the **"Master Thesis" GitHub Project (v2)** on github.com
+(`RadoSlav220/Master-Thesis`), as epics with sub-issues (Status/Priority/Size fields).
+Notable next-up epics: real external API fetch (replace the mock), authentication &
+authorization, a Dashboard enhancement, and a `DATABASE` data-source type. Flyway
+migrations are backlog but **lowest priority** (see Persistence above).
+To interact with this repo's GitHub via `gh`, use `GH_HOST=github.com` (the CLI is also
+logged into github.tools.sap, which is the default host).
 
 ## Conventions
 
@@ -69,5 +114,5 @@ backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
   `NotFoundException` and the `GlobalExceptionHandler`.
 - Frontend: MUI `Stack`/`Typography` need an `sx` prop present (an overload-resolution
   quirk in the installed MUI version) — route layout props through `sx`.
-- Each part is checked in CI on push: backend `mvn package`, frontend lint + build,
-  analysis-service ruff + pytest.
+- Backend → Python calls: build multipart with `LinkedMultiValueMap` + `HttpEntity`/
+  `ContentDisposition` on an HTTP/1.1-pinned `RestClient` (see the HTTP-client decision above).

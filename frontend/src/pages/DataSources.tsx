@@ -13,6 +13,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import { useState } from "react";
 import PageHeader from "../components/common/PageHeader";
+import DataSourceDetails from "../components/common/DataSourceDetails";
 import DataSourceForm from "../components/forms/DataSourceForm";
 import FetchDatasetForm from "../components/forms/FetchDatasetForm";
 import { useDataSources } from "../hooks/useDataSources";
@@ -21,6 +22,7 @@ import type { DataSource } from "../types";
 export default function DataSources() {
   const [open, setOpen] = useState(false);
   const [fetchSource, setFetchSource] = useState<DataSource | null>(null);
+  const [detailsSource, setDetailsSource] = useState<DataSource | null>(null);
   const { data, isLoading, isError } = useDataSources();
 
   return (
@@ -46,7 +48,12 @@ export default function DataSources() {
             </TableHead>
             <TableBody>
               {data.map((s) => (
-                <TableRow key={s.id}>
+                <TableRow
+                  key={s.id}
+                  hover
+                  sx={{ cursor: "pointer" }}
+                  onClick={() => setDetailsSource(s)}
+                >
                   <TableCell>{s.name}</TableCell>
                   <TableCell>{s.type}</TableCell>
                   <TableCell>{s.outputFormat}</TableCell>
@@ -56,7 +63,10 @@ export default function DataSources() {
                     <Button
                       size="small"
                       startIcon={<CloudDownloadIcon />}
-                      onClick={() => setFetchSource(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFetchSource(s);
+                      }}
                     >
                       Fetch
                     </Button>
@@ -75,6 +85,12 @@ export default function DataSources() {
         </Paper>
       )}
       <DataSourceForm open={open} onClose={() => setOpen(false)} />
+      <DataSourceDetails
+        source={detailsSource}
+        open={!!detailsSource}
+        onClose={() => setDetailsSource(null)}
+        onFetch={(s) => setFetchSource(s)}
+      />
       <FetchDatasetForm
         source={fetchSource}
         open={!!fetchSource}
