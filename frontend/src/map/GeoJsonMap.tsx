@@ -28,14 +28,27 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Renders a feature's properties as a simple key/value HTML table for a popup. */
-function propertiesHtml(properties: Record<string, unknown> | null | undefined): string {
+/** Renders a single feature's properties as key/value rows. */
+function featurePropertiesHtml(properties: Record<string, unknown> | null | undefined): string {
   const entries = Object.entries(properties ?? {});
   if (entries.length === 0) return "<em>No properties</em>";
-  const rows = entries
+  return entries
     .map(([k, v]) => `<div><strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}</div>`)
     .join("");
-  return `<div style="max-height:200px;overflow:auto;font-size:12px">${rows}</div>`;
+}
+
+/** Renders every feature under a click into one scrollable popup, separated and counted. */
+function popupHtml(features: maplibregl.MapGeoJSONFeature[]): string {
+  const blocks = features
+    .map((f, i) => {
+      const heading =
+        features.length > 1
+          ? `<div style="font-weight:600;margin-bottom:2px">Feature ${i + 1} of ${features.length}</div>`
+          : "";
+      return `<div>${heading}${featurePropertiesHtml(f.properties)}</div>`;
+    })
+    .join('<hr style="border:none;border-top:1px solid #ddd;margin:6px 0" />');
+  return `<div style="max-height:220px;overflow:auto;font-size:12px">${blocks}</div>`;
 }
 
 /** Extends bounds with every coordinate pair found in an arbitrarily-nested array. */
@@ -120,17 +133,15 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
         paint: { "text-color": "#111", "text-halo-color": "#fff", "text-halo-width": 1.5 },
       });
 
-      // Click a feature to show its properties; pointer cursor signals interactivity.
+      // Click shows the properties of every feature under the cursor (handles overlaps);
+      // pointer cursor on hover signals interactivity.
       const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" });
+      map.on("click", (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: INTERACTIVE_LAYERS });
+        if (features.length === 0) return;
+        popup.setLngLat(e.lngLat).setHTML(popupHtml(features)).addTo(map);
+      });
       for (const layerId of INTERACTIVE_LAYERS) {
-        map.on("click", layerId, (e) => {
-          const feature = e.features?.[0];
-          if (!feature) return;
-          popup
-            .setLngLat(e.lngLat)
-            .setHTML(propertiesHtml(feature.properties))
-            .addTo(map);
-        });
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
