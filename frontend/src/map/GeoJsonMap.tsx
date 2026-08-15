@@ -34,7 +34,7 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: [23.32, 42.7],
       zoom: 10,
     });
@@ -133,7 +133,7 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
 
   return (
     <Box>
-      <div ref={containerRef} style={{ width: "100%", height: 480, borderRadius: 8 }} />
+      <div ref={containerRef} style={{ width: "100%", height: 600, borderRadius: 8 }} />
       {isEmpty && (
         <Typography sx={{ color: "text.secondary", mt: 1 }}>No geometry to display.</Typography>
       )}
