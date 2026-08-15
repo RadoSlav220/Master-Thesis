@@ -14,6 +14,43 @@ interface GeoJsonMapProps {
 const SOURCE_ID = "geojson-data";
 const EMPTY: GeoJsonFeatureCollection = { type: "FeatureCollection", features: [] };
 
+/** Geometry layers that expose feature properties on click. */
+const INTERACTIVE_LAYERS = ["gj-fill", "gj-line", "gj-circle"];
+
+/** Escapes a value for safe insertion into popup HTML (feature properties are arbitrary). */
+function escapeHtml(value: unknown): string {
+  const str = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Renders a single feature's properties as key/value rows. */
+function featurePropertiesHtml(properties: Record<string, unknown> | null | undefined): string {
+  const entries = Object.entries(properties ?? {});
+  if (entries.length === 0) return "<em>No properties</em>";
+  return entries
+    .map(([k, v]) => `<div><strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}</div>`)
+    .join("");
+}
+
+/** Renders every feature under a click into one scrollable popup, separated and counted. */
+function popupHtml(features: maplibregl.MapGeoJSONFeature[]): string {
+  const blocks = features
+    .map((f, i) => {
+      const heading =
+        features.length > 1
+          ? `<div style="font-weight:600;margin-bottom:2px">Feature ${i + 1} of ${features.length}</div>`
+          : "";
+      return `<div>${heading}${featurePropertiesHtml(f.properties)}</div>`;
+    })
+    .join('<hr style="border:none;border-top:1px solid #ddd;margin:6px 0" />');
+  return `<div style="max-height:220px;overflow:auto;font-size:12px">${blocks}</div>`;
+}
+
 /** Extends bounds with every coordinate pair found in an arbitrarily-nested array. */
 function extendBounds(bounds: maplibregl.LngLatBounds, coords: unknown): void {
   if (!Array.isArray(coords)) return;
@@ -34,7 +71,7 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: [23.32, 42.7],
       zoom: 10,
     });
@@ -96,6 +133,23 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
         paint: { "text-color": "#111", "text-halo-color": "#fff", "text-halo-width": 1.5 },
       });
 
+      // Click shows the properties of every feature under the cursor (handles overlaps);
+      // pointer cursor on hover signals interactivity.
+      const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" });
+      map.on("click", (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: INTERACTIVE_LAYERS });
+        if (features.length === 0) return;
+        popup.setLngLat(e.lngLat).setHTML(popupHtml(features)).addTo(map);
+      });
+      for (const layerId of INTERACTIVE_LAYERS) {
+        map.on("mouseenter", layerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
+
       readyRef.current = true;
       updateData();
     });
@@ -133,7 +187,7 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
 
   return (
     <Box>
-      <div ref={containerRef} style={{ width: "100%", height: 480, borderRadius: 8 }} />
+      <div ref={containerRef} style={{ width: "100%", height: 600, borderRadius: 8 }} />
       {isEmpty && (
         <Typography sx={{ color: "text.secondary", mt: 1 }}>No geometry to display.</Typography>
       )}
