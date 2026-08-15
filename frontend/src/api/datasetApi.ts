@@ -34,6 +34,13 @@ export const datasetApi = {
     const { data } = await apiClient.get<GeoJsonFeatureCollection>(`/datasets/${id}/geojson`);
     return data;
   },
+  download: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+    const response = await apiClient.get(`/datasets/${id}/download`, { responseType: "blob" });
+    const disposition = response.headers["content-disposition"] as string | undefined;
+    const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^"';]+)"?/i);
+    const filename = match ? decodeURIComponent(match[1]) : `dataset-${id}`;
+    return { blob: response.data as Blob, filename };
+  },
   analyze: async (id: string): Promise<DatasetAnalysis> => {
     const { data } = await apiClient.post<DatasetAnalysis>(`/datasets/${id}/analyze`);
     return data;

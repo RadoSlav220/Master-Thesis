@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.DatasetOrigin;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
+import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
@@ -136,6 +137,21 @@ public class DatasetService {
         }
         String filename = dataset.getName() + extensionFor(dataset.getType());
         return datasetAnalysisClient.analyze(filename, content);
+    }
+
+    /**
+     * Returns a dataset's raw content packaged for download: the content plus the
+     * filename ("&lt;name&gt;.&lt;ext&gt;") and content type derived from its type.
+     */
+    public DatasetDownload download(UUID id) {
+        Dataset dataset = findEntity(id);
+        String content = dataset.getContent();
+        if (content == null || content.isBlank()) {
+            throw new NotFoundException("Dataset has no downloadable content: " + id);
+        }
+        String filename = dataset.getName() + extensionFor(dataset.getType());
+        String contentType = "CSV".equalsIgnoreCase(dataset.getType()) ? "text/csv" : "application/geo+json";
+        return new DatasetDownload(content, filename, contentType);
     }
 
     /** Maps a dataset type to a filename extension the analysis service recognizes. */
