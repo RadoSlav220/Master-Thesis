@@ -20,12 +20,13 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DownloadIcon from "@mui/icons-material/Download";
 import ScienceIcon from "@mui/icons-material/Science";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMemo } from "react";
 import PageHeader from "../components/common/PageHeader";
 import GeoJsonMap from "../map/GeoJsonMap";
-import { useAnalyzeDataset, useDataset, useDatasetGeoJson } from "../hooks/useDatasets";
+import { useAnalyzeDataset, useDataset, useDatasetGeoJson, useDownloadDataset } from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
 
 export default function DatasetDetails() {
@@ -34,6 +35,7 @@ export default function DatasetDetails() {
   const dataset = useDataset(id);
   const geo = useDatasetGeoJson(dataset.data?.hasGeoJson ? id : null);
   const analyze = useAnalyzeDataset();
+  const download = useDownloadDataset();
 
   const fc = geo.data ?? null;
   const types = useMemo(() => geometryTypes(fc), [fc]);
@@ -63,9 +65,24 @@ export default function DatasetDetails() {
   return (
     <>
       <PageHeader title="Dataset Details" />
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/datasets")} sx={{ mb: 2 }}>
-        Back to datasets
-      </Button>
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/datasets")}>
+          Back to datasets
+        </Button>
+        <Button
+          startIcon={<DownloadIcon />}
+          onClick={() => download.mutate(id)}
+          disabled={download.isPending}
+        >
+          Download
+        </Button>
+      </Stack>
+
+      {download.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Download failed — the dataset may have no content.
+        </Alert>
+      )}
 
       {dataset.isLoading && <CircularProgress />}
       {dataset.isError && <Alert severity="error">Failed to load dataset.</Alert>}

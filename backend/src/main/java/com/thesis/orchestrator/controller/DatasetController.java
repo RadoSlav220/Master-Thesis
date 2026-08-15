@@ -1,12 +1,15 @@
 package com.thesis.orchestrator.controller;
 
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
+import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.service.DatasetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -60,6 +63,16 @@ public class DatasetController {
     @GetMapping(value = "/{id}/geojson", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> getGeoJson(@PathVariable UUID id) {
         return ResponseEntity.ok(datasetService.getGeoJson(id));
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<String> download(@PathVariable UUID id) {
+        DatasetDownload download = datasetService.download(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(download.filename()).build().toString())
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .body(download.content());
     }
 
     @PostMapping("/{id}/analyze")

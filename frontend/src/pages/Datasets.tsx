@@ -11,13 +11,14 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import DatasetForm from "../components/forms/DatasetForm";
-import { useDatasets, useDeleteDataset } from "../hooks/useDatasets";
+import { useDatasets, useDeleteDataset, useDownloadDataset } from "../hooks/useDatasets";
 import type { Dataset } from "../types";
 
 export default function Datasets() {
@@ -26,6 +27,7 @@ export default function Datasets() {
   const [toDelete, setToDelete] = useState<Dataset | null>(null);
   const { data, isLoading, isError } = useDatasets();
   const del = useDeleteDataset();
+  const download = useDownloadDataset();
   const navigate = useNavigate();
 
   const confirmDelete = () => {
@@ -69,6 +71,17 @@ export default function Datasets() {
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      aria-label="download dataset"
+                      disabled={download.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        download.mutate(d.id);
+                      }}
+                    >
+                      <DownloadIcon fontSize="small" />
+                    </IconButton>
                     <IconButton
                       size="small"
                       aria-label="edit dataset"
