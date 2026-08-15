@@ -14,6 +14,30 @@ interface GeoJsonMapProps {
 const SOURCE_ID = "geojson-data";
 const EMPTY: GeoJsonFeatureCollection = { type: "FeatureCollection", features: [] };
 
+/** Geometry layers that expose feature properties on click. */
+const INTERACTIVE_LAYERS = ["gj-fill", "gj-line", "gj-circle"];
+
+/** Escapes a value for safe insertion into popup HTML (feature properties are arbitrary). */
+function escapeHtml(value: unknown): string {
+  const str = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Renders a feature's properties as a simple key/value HTML table for a popup. */
+function propertiesHtml(properties: Record<string, unknown> | null | undefined): string {
+  const entries = Object.entries(properties ?? {});
+  if (entries.length === 0) return "<em>No properties</em>";
+  const rows = entries
+    .map(([k, v]) => `<div><strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}</div>`)
+    .join("");
+  return `<div style="max-height:200px;overflow:auto;font-size:12px">${rows}</div>`;
+}
+
 /** Extends bounds with every coordinate pair found in an arbitrarily-nested array. */
 function extendBounds(bounds: maplibregl.LngLatBounds, coords: unknown): void {
   if (!Array.isArray(coords)) return;
@@ -95,6 +119,25 @@ export default function GeoJsonMap({ data, valueProperty }: GeoJsonMapProps) {
         },
         paint: { "text-color": "#111", "text-halo-color": "#fff", "text-halo-width": 1.5 },
       });
+
+      // Click a feature to show its properties; pointer cursor signals interactivity.
+      const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "320px" });
+      for (const layerId of INTERACTIVE_LAYERS) {
+        map.on("click", layerId, (e) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          popup
+            .setLngLat(e.lngLat)
+            .setHTML(propertiesHtml(feature.properties))
+            .addTo(map);
+        });
+        map.on("mouseenter", layerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
 
       readyRef.current = true;
       updateData();
