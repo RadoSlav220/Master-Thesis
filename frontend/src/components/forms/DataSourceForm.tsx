@@ -40,6 +40,8 @@ export default function DataSourceForm({ open, onClose, dataSource }: DataSource
   const [name, setName] = useState("");
   const [type, setType] = useState<DataSourceType>("API");
   const [outputFormat, setOutputFormat] = useState<DataSourceOutputFormat>("GEOJSON");
+  const [endpointUrl, setEndpointUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [description, setDescription] = useState("");
   const [params, setParams] = useState<QueryParameter[]>([]);
   const create = useCreateDataSource();
@@ -54,6 +56,8 @@ export default function DataSourceForm({ open, onClose, dataSource }: DataSource
       setName(dataSource?.name ?? "");
       setType((dataSource?.type as DataSourceType) ?? "API");
       setOutputFormat((dataSource?.outputFormat as DataSourceOutputFormat) ?? "GEOJSON");
+      setEndpointUrl(dataSource?.endpointUrl ?? "");
+      setApiKey(dataSource?.apiKey ?? "");
       setDescription(dataSource?.description ?? "");
       setParams(
         (dataSource?.queryParameters ?? []).map((p) => ({
@@ -85,6 +89,8 @@ export default function DataSourceForm({ open, onClose, dataSource }: DataSource
       name,
       type,
       outputFormat,
+      endpointUrl: endpointUrl.trim() || undefined,
+      apiKey: apiKey.trim() || undefined,
       description: description || undefined,
       queryParameters: queryParameters.length ? queryParameters : undefined,
     };
@@ -128,6 +134,20 @@ export default function DataSourceForm({ open, onClose, dataSource }: DataSource
               </MenuItem>
             ))}
           </TextField>
+          <TextField
+            label="Endpoint URL"
+            value={endpointUrl}
+            onChange={(e) => setEndpointUrl(e.target.value)}
+            placeholder="https://api.example.com/data (leave blank to use mock data)"
+            fullWidth
+          />
+          <TextField
+            label="API Key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Leave blank if not required"
+            fullWidth
+          />
           <TextField
             label="Description"
             value={description}

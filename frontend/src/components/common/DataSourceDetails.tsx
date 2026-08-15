@@ -46,6 +46,8 @@ export default function DataSourceDetails({ source, open, onClose, onFetch }: Da
         <Stack spacing={1} sx={{ mt: 1 }}>
           <Field label="Type" value={source.type} />
           <Field label="Output Format" value={source.outputFormat} />
+          <Field label="Endpoint URL" value={source.endpointUrl ?? "— (mock)"} />
+          <Field label="API Key" value={source.apiKey ? "••••••••" : "—"} />
           <Field label="Description" value={source.description ?? "—"} />
           <Field label="Created" value={new Date(source.createdAt).toLocaleString()} />
 

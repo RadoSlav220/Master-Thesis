@@ -47,6 +47,8 @@ public class DataSourceService {
                 .name(request.name())
                 .type(request.type())
                 .outputFormat(request.outputFormat())
+                .endpointUrl(request.endpointUrl())
+                .apiKey(request.apiKey())
                 .description(request.description())
                 .queryParameters(toDefinitions(request.queryParameters()))
                 .createdAt(Instant.now())
@@ -69,6 +71,8 @@ public class DataSourceService {
         dataSource.setName(request.name());
         dataSource.setType(request.type());
         dataSource.setOutputFormat(request.outputFormat());
+        dataSource.setEndpointUrl(request.endpointUrl());
+        dataSource.setApiKey(request.apiKey());
         dataSource.setDescription(request.description());
         // Replace the query-parameter definitions in place so Hibernate diffs the
         // collection table rather than orphaning the old collection instance.

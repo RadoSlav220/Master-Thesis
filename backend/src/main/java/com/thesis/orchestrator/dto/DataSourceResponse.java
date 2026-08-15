@@ -13,6 +13,8 @@ public record DataSourceResponse(
         String name,
         DataSourceType type,
         String outputFormat,
+        String endpointUrl,
+        String apiKey,
         String description,
         List<QueryParameter> queryParameters,
         Instant createdAt
@@ -26,6 +28,8 @@ public record DataSourceResponse(
                 dataSource.getName(),
                 dataSource.getType(),
                 dataSource.getOutputFormat(),
+                dataSource.getEndpointUrl(),
+                dataSource.getApiKey(),
                 dataSource.getDescription(),
                 params,
                 dataSource.getCreatedAt()

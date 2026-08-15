@@ -28,7 +28,7 @@ import java.util.UUID;
  * registration.
  */
 @Entity
-@Table(name = "data_sources")
+@Table(name = "data_sources")   
 @Getter
 @Setter
 @NoArgsConstructor
@@ -52,6 +52,17 @@ public class DataSource {
     @Column(nullable = false)
     private String outputFormat;
 
+    /**
+     * Base URL of the external API this source fetches from. Nullable: legacy sources
+     * (and any registered without one) fall back to mock generation in the fetcher.
+     */
+    @Column
+    private String endpointUrl;
+
+    /** Optional API key sent as a query parameter named {@code apiKey}. Nullable. */
+    @Column
+    private String apiKey;
+    
     @Column(columnDefinition = "text")
     private String description;
 

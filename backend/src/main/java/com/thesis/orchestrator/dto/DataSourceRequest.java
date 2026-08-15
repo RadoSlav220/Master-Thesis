@@ -11,6 +11,8 @@ public record DataSourceRequest(
         @NotBlank String name,
         @NotNull DataSourceType type,
         @NotBlank String outputFormat,
+        String endpointUrl,
+        String apiKey,
         String description,
         @Valid List<QueryParameter> queryParameters
 ) {

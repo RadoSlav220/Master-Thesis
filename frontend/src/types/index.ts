@@ -100,6 +100,8 @@ export interface DataSource {
   name: string;
   type: string;
   outputFormat: string;
+  endpointUrl: string | null;
+  apiKey: string | null;
   description: string | null;
   queryParameters: QueryParameter[];
   createdAt: string;
@@ -109,6 +111,8 @@ export interface CreateDataSourceRequest {
   name: string;
   type: DataSourceType;
   outputFormat: DataSourceOutputFormat;
+  endpointUrl?: string;
+  apiKey?: string;
   description?: string;
   queryParameters?: QueryParameter[];
 }
