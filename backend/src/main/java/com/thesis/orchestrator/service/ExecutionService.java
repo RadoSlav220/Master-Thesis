@@ -6,6 +6,7 @@ import com.thesis.orchestrator.domain.Component;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.Execution;
 import com.thesis.orchestrator.domain.ExecutionStatus;
+import com.thesis.orchestrator.dto.ExecutionDownload;
 import com.thesis.orchestrator.dto.ExecutionRequest;
 import com.thesis.orchestrator.dto.ExecutionResponse;
 import com.thesis.orchestrator.dto.FilterSpec;
@@ -114,6 +115,26 @@ public class ExecutionService {
 
     public ExecutionResponse getById(UUID id) {
         return ExecutionResponse.from(findEntity(id));
+    }
+
+    /**
+     * Returns an execution's result packaged for download. Component results are GeoJSON
+     * FeatureCollections, so the file is a ".geojson" with "application/geo+json" content
+     * type, named after the execution's id. 404s when the execution has no result yet
+     * (i.e. it is not COMPLETED).
+     */
+    public ExecutionDownload download(UUID id) {
+        Execution execution = findEntity(id);
+        String result = execution.getResult();
+        if (result == null || result.isBlank()) {
+            throw new NotFoundException("Execution has no downloadable result: " + id);
+        }
+        String filename = "execution-" + shortId(execution.getId()) + ".geojson";
+        return new ExecutionDownload(result, filename, "application/geo+json");
+    }
+
+    private static String shortId(UUID id) {
+        return id.toString().substring(0, 8);
     }
 
     public void delete(UUID id) {

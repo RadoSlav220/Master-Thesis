@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useMemo, useState } from "react";
 import PageHeader from "../components/common/PageHeader";
 import StatusChip from "../components/common/StatusChip";
@@ -30,7 +31,12 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import JsonViewer from "../components/common/JsonViewer";
 import { useDatasets } from "../hooks/useDatasets";
 import { useComponents } from "../hooks/useComponents";
-import { useCreateExecution, useDeleteExecution, useExecutions } from "../hooks/useExecutions";
+import {
+  useCreateExecution,
+  useDeleteExecution,
+  useDownloadExecution,
+  useExecutions,
+} from "../hooks/useExecutions";
 import { useSelectionStore } from "../store/selectionStore";
 import type { Execution, FilterSpec } from "../types";
 
@@ -40,6 +46,7 @@ export default function Executions() {
   const executions = useExecutions();
   const createExecution = useCreateExecution();
   const deleteExecution = useDeleteExecution();
+  const downloadExecution = useDownloadExecution();
 
   const {
     selectedDatasetId,
@@ -240,6 +247,19 @@ export default function Executions() {
                   <TableCell>{new Date(e.createdAt).toLocaleString()}</TableCell>
                   <TableCell>{e.finishedAt ? new Date(e.finishedAt).toLocaleString() : "—"}</TableCell>
                   <TableCell align="right">
+                    {e.status === "COMPLETED" && (
+                      <IconButton
+                        size="small"
+                        aria-label="download result"
+                        disabled={downloadExecution.isPending}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          downloadExecution.mutate(e.id);
+                        }}
+                      >
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    )}
                     <IconButton
                       size="small"
                       aria-label="delete execution"
@@ -267,9 +287,24 @@ export default function Executions() {
 
       {selected && (
         <Box>
-          <Typography variant="h6" gutterBottom>
-            Execution {selected.id.slice(0, 8)}… <StatusChip status={selected.status} />
-          </Typography>
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{ mb: 1, alignItems: "center", justifyContent: "space-between" }}
+          >
+            <Typography variant="h6" sx={{}}>
+              Execution {selected.id.slice(0, 8)}… <StatusChip status={selected.status} />
+            </Typography>
+            {selected.status === "COMPLETED" && (
+              <Button
+                startIcon={<DownloadIcon />}
+                onClick={() => downloadExecution.mutate(selected.id)}
+                disabled={downloadExecution.isPending}
+              >
+                Download result
+              </Button>
+            )}
+          </Stack>
           {selected.filterSpec && (
             <Alert severity="info" sx={{ mb: 2 }}>
               Applied filter: {selected.filterSpec}
@@ -278,6 +313,11 @@ export default function Executions() {
           {selected.status === "FAILED" && selected.errorMessage && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {selected.errorMessage}
+            </Alert>
+          )}
+          {downloadExecution.isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Download failed — the result may be unavailable.
             </Alert>
           )}
           <JsonViewer json={selected.result} />
