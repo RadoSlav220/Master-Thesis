@@ -35,6 +35,7 @@ import {
   useDownloadDataset,
 } from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
+import type { GeoJsonFeature, GeoJsonFeatureCollection } from "../types";
 
 export default function DatasetDetails() {
   const { id = "" } = useParams();
@@ -75,6 +76,32 @@ export default function DatasetDetails() {
 
   const stations = useDatasetStations(isStationDataset ? id : null);
   const measurements = useDatasetMeasurements(isStationDataset ? id : null, 500);
+
+  // Build a point FeatureCollection from the stations so they render on the map
+  // (dots + click-to-show-metadata popup). Stations without coordinates are skipped.
+  const stationFeatureCollection = useMemo<GeoJsonFeatureCollection | null>(() => {
+    if (!stations.data) return null;
+    const features: GeoJsonFeature[] = stations.data
+      .filter((s) => s.latitude != null && s.longitude != null)
+      .map((s) => {
+        const properties: Record<string, unknown> = { stationId: s.stationExternalId };
+        if (s.attributes) {
+          try {
+            Object.assign(properties, JSON.parse(s.attributes) as Record<string, unknown>);
+          } catch {
+            properties.attributes = s.attributes;
+          }
+        }
+        return {
+          type: "Feature",
+          properties,
+          geometry: { type: "Point", coordinates: [s.longitude as number, s.latitude as number] },
+        };
+      });
+    return { type: "FeatureCollection", features };
+  }, [stations.data]);
+
+  const plottableStationCount = stationFeatureCollection?.features.length ?? 0;
 
   const canAnalyze =
     !isStationDataset && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
@@ -244,33 +271,21 @@ export default function DatasetDetails() {
                     <Alert severity="error">Failed to load stations.</Alert>
                   )}
                   {stations.data && (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Station ID</TableCell>
-                          <TableCell>Latitude</TableCell>
-                          <TableCell>Longitude</TableCell>
-                          <TableCell>Attributes</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {stations.data.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell>{s.stationExternalId}</TableCell>
-                            <TableCell>{s.latitude ?? "—"}</TableCell>
-                            <TableCell>{s.longitude ?? "—"}</TableCell>
-                            <TableCell>{s.attributes ?? "—"}</TableCell>
-                          </TableRow>
-                        ))}
-                        {stations.data.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={4} align="center">
-                              No stations.
-                            </TableCell>
-                          </TableRow>
+                    <>
+                      <GeoJsonMap data={stationFeatureCollection} />
+                      {stations.data.length > 0 && plottableStationCount === 0 && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          None of the {stations.data.length} station(s) have coordinates to plot.
+                        </Alert>
+                      )}
+                      {plottableStationCount < stations.data.length &&
+                        plottableStationCount > 0 && (
+                          <Alert severity="info" sx={{ mt: 1 }}>
+                            {stations.data.length - plottableStationCount} station(s) without
+                            coordinates are not shown on the map.
+                          </Alert>
                         )}
-                      </TableBody>
-                    </Table>
+                    </>
                   )}
                 </CardContent>
               </Card>
