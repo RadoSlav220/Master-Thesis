@@ -1,11 +1,16 @@
 package com.thesis.orchestrator.controller;
 
+import com.thesis.orchestrator.dto.ExecutionDownload;
 import com.thesis.orchestrator.dto.ExecutionRequest;
 import com.thesis.orchestrator.dto.ExecutionResponse;
 import com.thesis.orchestrator.service.ExecutionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +44,16 @@ public class ExecutionController {
     @GetMapping("/{id}")
     public ExecutionResponse getById(@PathVariable UUID id) {
         return executionService.getById(id);
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<String> download(@PathVariable UUID id) {
+        ExecutionDownload download = executionService.download(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(download.filename()).build().toString())
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .body(download.content());
     }
 
     @DeleteMapping("/{id}")
