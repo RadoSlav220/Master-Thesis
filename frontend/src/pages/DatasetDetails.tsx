@@ -105,7 +105,7 @@ export default function DatasetDetails() {
 
   const canAnalyze =
     !isStationDataset && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
-  const canDownload = !isStationDataset;
+  const canDownload = dataset.data?.hasContent ?? false;
 
   const provenance = dataset.data?.provenance ?? null;
   const queryParamEntries =

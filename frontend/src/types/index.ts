@@ -16,6 +16,7 @@ export interface Dataset {
   type: string;
   description: string | null;
   hasGeoJson: boolean;
+  hasContent: boolean;
   datasetType: string | null;
   analysisResult: string | null;
   sourceId: string | null;
