@@ -1,34 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { componentApi } from "../api/componentApi";
-import type { CreateComponentRequest } from "../types";
 
 const KEY = ["components"];
 
 export function useComponents() {
   return useQuery({ queryKey: KEY, queryFn: componentApi.list });
-}
-
-export function useCreateComponent() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateComponentRequest) => componentApi.create(payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
-  });
-}
-
-export function useDeleteComponent() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => componentApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
-  });
-}
-
-export function useUpdateComponent() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { id: string; payload: CreateComponentRequest }) =>
-      componentApi.update(vars.id, vars.payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
-  });
 }

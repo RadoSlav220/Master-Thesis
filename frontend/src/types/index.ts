@@ -80,12 +80,6 @@ export interface Component {
   description: string | null;
 }
 
-export interface CreateComponentRequest {
-  name: string;
-  endpointUrl: string;
-  description?: string;
-}
-
 export interface Execution {
   id: string;
   datasetId: string;
