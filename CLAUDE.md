@@ -31,10 +31,17 @@ and the reasoning behind key decisions.
 
 ## The pipeline (the thesis story)
 
-Data Source → **fetch** a snapshot for a period → **auto-analyze + persist** → optional
+**Manual CSV upload** of station + measurement data → **auto-analyze + persist** → optional
 **filter** (column/property selection + row limit) → run an analytical **component** →
-**visualize** the GeoJSON result on MapLibre. External source fetches and analytical
-models are **mocked** for now.
+**visualize** the GeoJSON result on MapLibre. Analytical models are **mocked** for now, and
+**components are predefined** (users cannot register them).
+
+The **primary ingestion path is manual upload** (mentor meeting 2026-08-22): the user uploads
+one or more **CSV** files describing measuring stations (at minimum `stationId`, `latitude`,
+`longitude`) plus their measurements, and classifies each column's role (station vs.
+measurement) during upload. The earlier "register a Data Source → fetch a snapshot over
+HTTP" path (API/DATABASE sources) is **kept but parked**, not deleted — see the deferred-
+scope note below.
 
 ## Key decisions and the "why" (read before changing related code)
 
@@ -58,13 +65,35 @@ models are **mocked** for now.
   differences are *data*, not *behavior*, so a discriminator enum + typed JSON blob keeps
   the schema flat while staying type-safe in code. `sourceId` stays top-level as the
   canonical source pointer.
+- **Station-based CSV upload (primary ingestion path)** — the near-term way data enters the
+  platform (mentor meeting 2026-08-22). The user uploads **one or more CSV files** (CSV only —
+  no GeoJSON in this flow) that must carry **station** info (at least `stationId`, `latitude`,
+  `longitude`) alongside measurements, and assigns each column a **role** during upload
+  (`STATION_ID` / `LATITUDE` / `LONGITUDE` / `STATION_ATTRIBUTE` / `MEASUREMENT` / `IGNORE`)
+  via an **interactive per-column UI** (client-side header parse + name-based guesses the user
+  can correct). The backend validates the required station roles, then transforms the CSVs into
+  the dataset's stored representation — GeoJSON point features per station (coords → geometry,
+  attributes/measurements → properties) — and runs the existing auto-analyze + persist step.
+  GeoJSON here is only the **internal storage/consumption** format (what the map + components
+  already use); it is **not** an accepted upload format. The existing generic CSV+GeoJSON
+  upload path (`/datasets/upload`) is left untouched and coexists with this station-based flow.
+  Rationale for choosing upload over live fetch: real sensor APIs split station metadata and
+  measurements across separate endpoints (would force users to describe a whole fetch pipeline),
+  and HTTP fetching is fragile — too complex for now. Tracked as epic #63 (sub-issues #64/#65/#66).
+- **Components are predefined** — users **cannot** register or edit analytical components
+  (mentor meeting 2026-08-22). Predefined components are **seeded** (the `demo` profile
+  auto-registers the mocks; real ones arrive via the "real components" epic). The user-facing
+  "Register Component" flow (frontend `ComponentForm` + backend create/update endpoints) is
+  slated for **removal** (issue #67); listing/viewing and **executing** components stay.
 - **Persistence** — Hibernate `ddl-auto: update`. Known limitations: it cannot add NOT
   NULL columns to populated tables, and column renames/removals leave orphaned columns
   behind. Add new columns **nullable**. `@Enumerated(STRING)` enums get a generated CHECK
   constraint on their column. In early dev, the local Postgres volume (`pgdata`) can just
   be pruned to shed accumulated schema drift. Flyway/migrations are the **lowest-priority**
   backlog item — do not design around them or treat them as a prerequisite.
-- **DataSource model** — `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
+- **DataSource model (parked path — kept, not deleted)** — the "register a source → fetch a
+  snapshot over HTTP" mechanism is **deprioritized in favor of manual CSV upload** (mentor
+  meeting 2026-08-22) but retained. `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
   reserved for later) + an `outputFormat` of `CSV` or `GEOJSON`. At registration a source
   also declares the **query parameters** its API expects (name, `required` flag, optional
   `defaultValue`). These definitions are stored **relationally** as a
@@ -74,8 +103,8 @@ models are **mocked** for now.
   mocked by `DataSourceFetcher` (no real HTTP yet). Future `DATABASE` sources will need
   type-specific config (connection/query), likely a `DataSourceConfig` sealed hierarchy
   mirroring `DatasetProvenance` below — not yet built.
-- **Fetch is parameterized by the source's registered query parameters** — the fetch
-  request carries only a dataset `name` + a `Map<String,String> queryParameters` (values
+- **Fetch is parameterized by the source's registered query parameters** *(part of the parked
+  fetch path above)* — the fetch request carries only a dataset `name` + a `Map<String,String> queryParameters` (values
   for the source's registered params). There are **no dedicated start/end date fields**:
   a time window, if a source needs one, is just registered as ordinary query parameters.
   The frontend Fetch dialog renders one text field per registered param (prefilled with
@@ -88,7 +117,8 @@ models are **mocked** for now.
   The applied filter is persisted on the execution as `filterSpec`. Filtered data feeds
   the model end-to-end for **GeoJSON**; CSV → model is deferred (mock components consume GeoJSON).
 - **Mock components** — `/mock-components/air-quality` and `/traffic` return GeoJSON
-  FeatureCollections. A `demo` Spring profile auto-registers them on startup.
+  FeatureCollections. A `demo` Spring profile auto-registers them on startup. (Components are
+  **predefined/seeded**, not user-registered — see the "Components are predefined" decision above.)
 - **Ops endpoints** — custom `/health` and `/info` (no Spring Actuator).
 - **Docker** — Java 25 base images; the frontend nginx proxies `/api/` → backend
   (same-origin, no CORS), mirroring the Vite dev proxy.
@@ -96,15 +126,23 @@ models are **mocked** for now.
 ## Constraints deliberately deferred (MVP scope)
 
 No authentication, PostGIS, workflow chaining, or message queues. (Auth is a planned
-backlog epic; PostGIS/predicate-filtering/real-fetch are backlog too.)
+backlog epic; PostGIS/predicate-filtering are backlog too.)
+
+**Parked in favor of manual CSV upload (mentor meeting 2026-08-22):** the live-fetch data-source
+mechanism — real external **API** fetch (epic #13) and the **DATABASE** (JDBC) source type
+(epic #37) — is kept in the codebase but deprioritized (moved to P2/Backlog). Do not build new
+work on top of it or treat it as the primary ingestion path; manual station-based CSV upload
+(epic #63) is the focus.
 
 ## Backlog / where work is tracked
 
 Planned work lives in the **"Master Thesis" GitHub Project (v2)** on github.com
 (`RadoSlav220/Master-Thesis`), as epics with sub-issues (Status/Priority/Size fields).
-Notable next-up epics: real external API fetch (replace the mock), authentication &
-authorization, a Dashboard enhancement, and a `DATABASE` data-source type. Flyway
-migrations are backlog but **lowest priority** (see Persistence above).
+Current focus: **station-based CSV upload** (epic #63) and removing the **Register Component**
+flow (#67). Other next-up epics: authentication & authorization, a Dashboard enhancement, and
+real analytical components (replace the mocks). The live-fetch epics — real external API fetch
+(#13) and the `DATABASE` data-source type (#37) — are **parked** (see the deferred-scope note
+above). Flyway migrations are backlog but **lowest priority** (see Persistence above).
 To interact with this repo's GitHub via `gh`, use `GH_HOST=github.com` (the CLI is also
 logged into github.tools.sap, which is the default host).
 

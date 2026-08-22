@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { datasetApi } from "../api/datasetApi";
-import type { CreateDatasetRequest, UpdateDatasetRequest } from "../types";
+import type {
+  CreateDatasetRequest,
+  StationUploadMapping,
+  UpdateDatasetRequest,
+} from "../types";
 
 const KEY = ["datasets"];
 
@@ -38,6 +42,35 @@ export function useUploadDataset() {
     mutationFn: (vars: { file: File; name: string; description?: string }) =>
       datasetApi.upload(vars.file, vars.name, vars.description),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useUploadStations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      files: File[];
+      name: string;
+      mapping: StationUploadMapping;
+      description?: string;
+    }) => datasetApi.uploadStations(vars.files, vars.name, vars.mapping, vars.description),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useDatasetStations(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, id, "stations"],
+    queryFn: () => datasetApi.getStations(id as string),
+    enabled: !!id,
+  });
+}
+
+export function useDatasetMeasurements(id: string | null, limit?: number) {
+  return useQuery({
+    queryKey: [...KEY, id, "measurements", limit],
+    queryFn: () => datasetApi.getMeasurements(id as string, limit),
+    enabled: !!id,
   });
 }
 

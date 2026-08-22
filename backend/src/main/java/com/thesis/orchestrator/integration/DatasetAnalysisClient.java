@@ -3,6 +3,7 @@ package com.thesis.orchestrator.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
+import com.thesis.orchestrator.dto.StationExtractionResponse;
 import com.thesis.orchestrator.exception.DatasetAnalysisException;
 import com.thesis.orchestrator.exception.InvalidDataException;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,9 +18,12 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Sends a dataset file to the external Python dataset-analysis service and returns
@@ -78,6 +82,53 @@ public class DatasetAnalysisClient {
         } catch (Exception ex) {
             throw new DatasetAnalysisException(
                     "Dataset analysis service call failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Sends one or more CSV files plus a column-role mapping to the analysis service's
+     * {@code /extract-stations} endpoint and returns the extracted stations + long-format
+     * measurements. Each file becomes a repeated {@code files} multipart part; the mapping
+     * is sent as a plain-text {@code mapping} form field (a JSON string).
+     */
+    public StationExtractionResponse extractStations(List<MultipartFile> files, String mappingJson) {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        for (MultipartFile file : files) {
+            String filename = file.getOriginalFilename();
+            ByteArrayResource resource;
+            try {
+                resource = new ByteArrayResource(file.getBytes()) {
+                    @Override
+                    public String getFilename() {
+                        return filename;
+                    }
+                };
+            } catch (IOException ex) {
+                throw new DatasetAnalysisException("Could not read uploaded file: " + ex.getMessage(), ex);
+            }
+            HttpHeaders partHeaders = new HttpHeaders();
+            partHeaders.setContentDisposition(
+                    ContentDisposition.formData().name("files").filename(filename).build());
+            body.add("files", new HttpEntity<>(resource, partHeaders));
+        }
+        body.add("mapping", mappingJson);
+
+        try {
+            return restClient.post()
+                    .uri(serviceUrl + "/extract-stations")
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(StationExtractionResponse.class);
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().is4xxClientError()) {
+                throw new InvalidDataException("Station upload is invalid: " + detailOf(ex));
+            }
+            throw new DatasetAnalysisException(
+                    "Station extraction service call failed: " + ex.getMessage(), ex);
+        } catch (Exception ex) {
+            throw new DatasetAnalysisException(
+                    "Station extraction service call failed: " + ex.getMessage(), ex);
         }
     }
 

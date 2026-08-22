@@ -5,26 +5,37 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.DatasetOrigin;
+import com.thesis.orchestrator.domain.Measurement;
+import com.thesis.orchestrator.domain.Station;
 import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.dto.DatasetUpdateRequest;
+import com.thesis.orchestrator.dto.MeasurementResponse;
+import com.thesis.orchestrator.dto.StationExtractionResponse;
+import com.thesis.orchestrator.dto.StationResponse;
 import com.thesis.orchestrator.exception.DatasetAnalysisException;
 import com.thesis.orchestrator.exception.InvalidUploadException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.DatasetAnalysisClient;
 import com.thesis.orchestrator.repository.DatasetRepository;
+import com.thesis.orchestrator.repository.MeasurementRepository;
+import com.thesis.orchestrator.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +46,8 @@ public class DatasetService {
     private static final Logger log = LoggerFactory.getLogger(DatasetService.class);
 
     private final DatasetRepository datasetRepository;
+    private final StationRepository stationRepository;
+    private final MeasurementRepository measurementRepository;
     private final ObjectMapper objectMapper;
     private final DatasetAnalysisClient datasetAnalysisClient;
 
@@ -92,6 +105,85 @@ public class DatasetService {
         return DatasetResponse.from(datasetRepository.save(dataset));
     }
 
+    /**
+     * Creates a dataset from one or more uploaded station CSV files plus a column-role
+     * mapping. The Python analysis service parses the files into a relational shape
+     * (deduplicated stations + long-format measurements); this method persists that shape
+     * across the {@code datasets}, {@code stations} and {@code measurements} tables. The
+     * dataset row itself carries no {@code content} (the data lives in the relational tables).
+     * Runs in a single transaction so a persistence failure rolls everything back; malformed
+     * input (analysis service 4xx -&gt; InvalidDataException) aborts before anything is saved.
+     */
+    @Transactional
+    public DatasetResponse uploadStations(
+            List<MultipartFile> files, String name, String description, String mappingJson) {
+        if (files == null || files.isEmpty() || files.stream().allMatch(MultipartFile::isEmpty)) {
+            throw new InvalidUploadException("At least one file is required.");
+        }
+        if (name == null || name.isBlank()) {
+            throw new InvalidUploadException("A dataset name is required.");
+        }
+        if (mappingJson == null || mappingJson.isBlank()) {
+            throw new InvalidUploadException("A column-role mapping is required.");
+        }
+
+        // Parse + validate in the Python service before persisting anything.
+        StationExtractionResponse extraction = datasetAnalysisClient.extractStations(files, mappingJson);
+
+        Dataset dataset = datasetRepository.save(Dataset.builder()
+                .name(name)
+                .type("CSV")
+                .description(description)
+                .datasetOrigin(DatasetOrigin.UPLOAD)
+                .provenance(serializeProvenance(new DatasetProvenance.UploadProvenance()))
+                .createdAt(Instant.now())
+                .build());
+
+        UUID datasetId = dataset.getId();
+
+        List<Station> stations = extraction.stations().stream()
+                .map(record -> Station.builder()
+                        .datasetId(datasetId)
+                        .stationExternalId(record.stationExternalId())
+                        .latitude(record.latitude())
+                        .longitude(record.longitude())
+                        .attributes(serializeAttributes(record.attributes()))
+                        .build())
+                .toList();
+        stationRepository.saveAll(stations);
+
+        List<Measurement> measurements = extraction.measurements().stream()
+                .map(record -> Measurement.builder()
+                        .datasetId(datasetId)
+                        .stationExternalId(record.stationExternalId())
+                        .timestamp(parseTimestamp(record.timestamp()))
+                        .measurementType(record.measurementType())
+                        .value(record.value())
+                        .valueNumeric(record.valueNumeric())
+                        .build())
+                .toList();
+        measurementRepository.saveAll(measurements);
+
+        return DatasetResponse.from(dataset);
+    }
+
+    /** Returns the stations extracted from a station-based upload. */
+    public List<StationResponse> getStations(UUID datasetId) {
+        findEntity(datasetId);
+        return stationRepository.findByDatasetId(datasetId).stream()
+                .map(StationResponse::from)
+                .toList();
+    }
+
+    /** Returns a dataset's measurements (long format), capped at {@code limit} rows. */
+    public List<MeasurementResponse> getMeasurements(UUID datasetId, int limit) {
+        findEntity(datasetId);
+        Pageable pageable = PageRequest.of(0, limit);
+        return measurementRepository.findByDatasetId(datasetId, pageable).stream()
+                .map(MeasurementResponse::from)
+                .toList();
+    }
+
     public List<DatasetResponse> getAll() {
         return datasetRepository.findAll().stream()
                 .map(DatasetResponse::from)
@@ -110,8 +202,14 @@ public class DatasetService {
         return DatasetResponse.from(datasetRepository.save(dataset));
     }
 
+    @Transactional
     public void delete(UUID id) {
-        datasetRepository.delete(findEntity(id));
+        Dataset dataset = findEntity(id);
+        // Stations/measurements reference the dataset by a bare datasetId (no JPA
+        // relationship), so cascade-delete their rows explicitly.
+        stationRepository.deleteByDatasetId(id);
+        measurementRepository.deleteByDatasetId(id);
+        datasetRepository.delete(dataset);
     }
 
     /** Returns the raw GeoJSON FeatureCollection stored for a dataset. */
@@ -177,6 +275,35 @@ public class DatasetService {
             return objectMapper.writeValueAsString(provenance);
         } catch (JsonProcessingException ex) {
             return null;
+        }
+    }
+
+    /** Serializes a station's extra attributes to a JSON object string; null when empty. */
+    private String serializeAttributes(java.util.Map<String, String> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(attributes);
+        } catch (JsonProcessingException ex) {
+            return null;
+        }
+    }
+
+    /** Parses an ISO-8601 timestamp emitted by the analysis service; null if absent/unparseable. */
+    private Instant parseTimestamp(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(value).toInstant();
+        } catch (DateTimeParseException ex) {
+            try {
+                return Instant.parse(value);
+            } catch (DateTimeParseException ignored) {
+                log.warn("Could not parse measurement timestamp '{}'", value);
+                return null;
+            }
         }
     }
 

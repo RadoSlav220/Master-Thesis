@@ -66,3 +66,42 @@ def test_filter_csv_endpoint():
     lines = body["content"].strip().splitlines()
     assert lines[0] == "timestamp"
     assert len(lines) == 2  # header + 1 row
+
+
+STATION_CSV = (
+    b"station,lat,lon,ts,pm25\n"
+    b"S1,42.69,23.32,2024-01-01T00:00:00Z,12\n"
+    b"S2,42.70,23.33,2024-01-01T00:00:00Z,9\n"
+)
+
+STATION_MAPPING = {
+    "s.csv": {
+        "station": "STATION_ID",
+        "lat": "LATITUDE",
+        "lon": "LONGITUDE",
+        "ts": "TIMESTAMP",
+        "pm25": "MEASUREMENT",
+    }
+}
+
+
+def test_extract_stations_endpoint():
+    resp = client.post(
+        "/extract-stations",
+        files=[("files", ("s.csv", STATION_CSV, "text/csv"))],
+        data={"mapping": json.dumps(STATION_MAPPING)},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["stations"]) == 2
+    assert len(body["measurements"]) == 2
+
+
+def test_extract_stations_invalid_mapping_returns_400():
+    bad_mapping = {"s.csv": {"station": "STATION_ID", "lat": "LATITUDE"}}  # no LONGITUDE
+    resp = client.post(
+        "/extract-stations",
+        files=[("files", ("s.csv", STATION_CSV, "text/csv"))],
+        data={"mapping": json.dumps(bad_mapping)},
+    )
+    assert resp.status_code == 400

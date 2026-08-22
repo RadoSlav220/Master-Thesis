@@ -26,7 +26,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMemo } from "react";
 import PageHeader from "../components/common/PageHeader";
 import GeoJsonMap from "../map/GeoJsonMap";
-import { useAnalyzeDataset, useDataset, useDatasetGeoJson, useDownloadDataset } from "../hooks/useDatasets";
+import {
+  useAnalyzeDataset,
+  useDataset,
+  useDatasetGeoJson,
+  useDatasetMeasurements,
+  useDatasetStations,
+  useDownloadDataset,
+} from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
 
 export default function DatasetDetails() {
@@ -56,7 +63,22 @@ export default function DatasetDetails() {
   const analysis = analyze.data ?? persistedAnalysis;
   const analyzedItems = analysis?.columns ?? analysis?.properties ?? [];
   const analyzedLabel = analysis?.columns ? "Columns" : "Properties";
-  const canAnalyze = !!dataset.data?.hasGeoJson || dataset.data?.type === "CSV";
+
+  // A station-based upload stores its data relationally (stations + measurements),
+  // not as file content — so it has no GeoJSON, no persisted analysis, and its
+  // Download/Analyze actions would fail on null content. Detect it and show the
+  // relational tables instead.
+  const isStationDataset =
+    dataset.data?.datasetOrigin === "UPLOAD" &&
+    !dataset.data?.hasGeoJson &&
+    !dataset.data?.analysisResult;
+
+  const stations = useDatasetStations(isStationDataset ? id : null);
+  const measurements = useDatasetMeasurements(isStationDataset ? id : null, 500);
+
+  const canAnalyze =
+    !isStationDataset && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
+  const canDownload = !isStationDataset;
 
   const provenance = dataset.data?.provenance ?? null;
   const queryParamEntries =
@@ -69,13 +91,15 @@ export default function DatasetDetails() {
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/datasets")}>
           Back to datasets
         </Button>
-        <Button
-          startIcon={<DownloadIcon />}
-          onClick={() => download.mutate(id)}
-          disabled={download.isPending}
-        >
-          Download
-        </Button>
+        {canDownload && (
+          <Button
+            startIcon={<DownloadIcon />}
+            onClick={() => download.mutate(id)}
+            disabled={download.isPending}
+          >
+            Download
+          </Button>
+        )}
       </Stack>
 
       {download.isError && (
@@ -206,6 +230,94 @@ export default function DatasetDetails() {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {isStationDataset && (
+            <>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Stations {stations.data ? `(${stations.data.length})` : ""}
+                  </Typography>
+                  {stations.isLoading && <CircularProgress size={24} />}
+                  {stations.isError && (
+                    <Alert severity="error">Failed to load stations.</Alert>
+                  )}
+                  {stations.data && (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Station ID</TableCell>
+                          <TableCell>Latitude</TableCell>
+                          <TableCell>Longitude</TableCell>
+                          <TableCell>Attributes</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {stations.data.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell>{s.stationExternalId}</TableCell>
+                            <TableCell>{s.latitude ?? "—"}</TableCell>
+                            <TableCell>{s.longitude ?? "—"}</TableCell>
+                            <TableCell>{s.attributes ?? "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                        {stations.data.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center">
+                              No stations.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Measurements {measurements.data ? `(showing ${measurements.data.length})` : ""}
+                  </Typography>
+                  {measurements.isLoading && <CircularProgress size={24} />}
+                  {measurements.isError && (
+                    <Alert severity="error">Failed to load measurements.</Alert>
+                  )}
+                  {measurements.data && (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Station ID</TableCell>
+                          <TableCell>Timestamp</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Value</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {measurements.data.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell>{m.stationExternalId}</TableCell>
+                            <TableCell>
+                              {m.timestamp ? new Date(m.timestamp).toLocaleString() : "—"}
+                            </TableCell>
+                            <TableCell>{m.measurementType}</TableCell>
+                            <TableCell>{m.value ?? "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                        {measurements.data.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center">
+                              No measurements.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </>
           )}
         </Stack>
       )}

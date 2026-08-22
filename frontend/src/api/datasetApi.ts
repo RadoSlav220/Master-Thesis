@@ -4,6 +4,9 @@ import type {
   Dataset,
   DatasetAnalysis,
   GeoJsonFeatureCollection,
+  Measurement,
+  Station,
+  StationUploadMapping,
   UpdateDatasetRequest,
 } from "../types";
 
@@ -27,6 +30,32 @@ export const datasetApi = {
     if (description) form.append("description", description);
     const { data } = await apiClient.post<Dataset>("/datasets/upload", form, {
       headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+  uploadStations: async (
+    files: File[],
+    name: string,
+    mapping: StationUploadMapping,
+    description?: string,
+  ): Promise<Dataset> => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    form.append("name", name);
+    form.append("mapping", JSON.stringify(mapping));
+    if (description) form.append("description", description);
+    const { data } = await apiClient.post<Dataset>("/datasets/upload-stations", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+  getStations: async (id: string): Promise<Station[]> => {
+    const { data } = await apiClient.get<Station[]>(`/datasets/${id}/stations`);
+    return data;
+  },
+  getMeasurements: async (id: string, limit?: number): Promise<Measurement[]> => {
+    const { data } = await apiClient.get<Measurement[]>(`/datasets/${id}/measurements`, {
+      params: limit ? { limit } : undefined,
     });
     return data;
   },

@@ -35,6 +35,36 @@ export interface UpdateDatasetRequest {
   description?: string;
 }
 
+/** A column's assigned role in a station-based CSV upload. */
+export type ColumnRole =
+  | "STATION_ID"
+  | "LATITUDE"
+  | "LONGITUDE"
+  | "TIMESTAMP"
+  | "STATION_ATTRIBUTE"
+  | "MEASUREMENT"
+  | "IGNORE";
+
+/** Per-file column-role mapping sent with a station upload: filename -> (column -> role). */
+export type StationUploadMapping = Record<string, Record<string, ColumnRole>>;
+
+export interface Station {
+  id: string;
+  stationExternalId: string;
+  latitude: number | null;
+  longitude: number | null;
+  attributes: string | null;
+}
+
+export interface Measurement {
+  id: string;
+  stationExternalId: string;
+  timestamp: string | null;
+  measurementType: string;
+  value: string | null;
+  valueNumeric: number | null;
+}
+
 export interface FetchDatasetRequest {
   name: string;
   queryParameters?: Record<string, string>;
