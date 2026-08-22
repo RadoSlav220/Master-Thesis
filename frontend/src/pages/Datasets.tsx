@@ -71,17 +71,19 @@ export default function Datasets() {
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      aria-label="download dataset"
-                      disabled={download.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        download.mutate(d.id);
-                      }}
-                    >
-                      <DownloadIcon fontSize="small" />
-                    </IconButton>
+                    {d.hasContent && (
+                      <IconButton
+                        size="small"
+                        aria-label="download dataset"
+                        disabled={download.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          download.mutate(d.id);
+                        }}
+                      >
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    )}
                     <IconButton
                       size="small"
                       aria-label="edit dataset"

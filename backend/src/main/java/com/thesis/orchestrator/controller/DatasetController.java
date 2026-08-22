@@ -5,6 +5,8 @@ import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
 import com.thesis.orchestrator.dto.DatasetUpdateRequest;
+import com.thesis.orchestrator.dto.MeasurementResponse;
+import com.thesis.orchestrator.dto.StationResponse;
 import com.thesis.orchestrator.service.DatasetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,28 @@ public class DatasetController {
             @RequestParam("name") String name,
             @RequestParam(value = "description", required = false) String description) {
         return datasetService.upload(file, name, description);
+    }
+
+    @PostMapping(value = "/upload-stations", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public DatasetResponse uploadStations(
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam("name") String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam("mapping") String mapping) {
+        return datasetService.uploadStations(files, name, description, mapping);
+    }
+
+    @GetMapping("/{id}/stations")
+    public List<StationResponse> getStations(@PathVariable UUID id) {
+        return datasetService.getStations(id);
+    }
+
+    @GetMapping("/{id}/measurements")
+    public List<MeasurementResponse> getMeasurements(
+            @PathVariable UUID id,
+            @RequestParam(value = "limit", defaultValue = "500") int limit) {
+        return datasetService.getMeasurements(id, limit);
     }
 
     @GetMapping
