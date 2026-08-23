@@ -66,6 +66,11 @@ export interface Measurement {
   valueNumeric: number | null;
 }
 
+export interface DatasetStats {
+  stationCount: number;
+  measurementCount: number;
+}
+
 export interface FetchDatasetRequest {
   name: string;
   queryParameters?: Record<string, string>;
