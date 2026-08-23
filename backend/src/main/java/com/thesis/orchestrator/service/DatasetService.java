@@ -12,6 +12,7 @@ import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.dto.DatasetStatsResponse;
 import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.dto.MeasurementResponse;
 import com.thesis.orchestrator.dto.StationExtractionResponse;
@@ -182,6 +183,15 @@ public class DatasetService {
         return measurementRepository.findByDatasetId(datasetId, pageable).stream()
                 .map(MeasurementResponse::from)
                 .toList();
+    }
+
+    /** Returns aggregate counts (stations, measurements) for a dataset. */
+    public DatasetStatsResponse getStats(UUID datasetId) {
+        findEntity(datasetId);
+        return new DatasetStatsResponse(
+                stationRepository.countByDatasetId(datasetId),
+                measurementRepository.countByDatasetId(datasetId)
+        );
     }
 
     public List<DatasetResponse> getAll() {

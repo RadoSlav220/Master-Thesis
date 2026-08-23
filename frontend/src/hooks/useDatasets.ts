@@ -74,6 +74,14 @@ export function useDatasetMeasurements(id: string | null, limit?: number) {
   });
 }
 
+export function useDatasetStats(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, id, "stats"],
+    queryFn: () => datasetApi.getStats(id as string),
+    enabled: !!id,
+  });
+}
+
 export function useAnalyzeDataset() {
   return useMutation({
     mutationFn: (id: string) => datasetApi.analyze(id),

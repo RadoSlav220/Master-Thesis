@@ -32,10 +32,14 @@ import {
   useDatasetGeoJson,
   useDatasetMeasurements,
   useDatasetStations,
+  useDatasetStats,
   useDownloadDataset,
 } from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
 import type { GeoJsonFeature, GeoJsonFeatureCollection } from "../types";
+
+/** Max measurement rows shown in the dataset detail preview table. */
+const MEASUREMENT_PREVIEW_LIMIT = 50;
 
 export default function DatasetDetails() {
   const { id = "" } = useParams();
@@ -75,7 +79,8 @@ export default function DatasetDetails() {
     !dataset.data?.analysisResult;
 
   const stations = useDatasetStations(isStationDataset ? id : null);
-  const measurements = useDatasetMeasurements(isStationDataset ? id : null, 500);
+  const measurements = useDatasetMeasurements(isStationDataset ? id : null, MEASUREMENT_PREVIEW_LIMIT);
+  const stats = useDatasetStats(isStationDataset ? id : null);
 
   // Build a point FeatureCollection from the stations so they render on the map
   // (dots + click-to-show-metadata popup). Stations without coordinates are skipped.
@@ -261,6 +266,16 @@ export default function DatasetDetails() {
 
           {isStationDataset && (
             <>
+              {stats.data && (
+                <Card>
+                  <CardContent>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                      <Chip label={`${stats.data.stationCount} stations`} />
+                      <Chip label={`${stats.data.measurementCount} measurements`} />
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -293,7 +308,12 @@ export default function DatasetDetails() {
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    Measurements {measurements.data ? `(showing ${measurements.data.length})` : ""}
+                    Measurements{" "}
+                    {measurements.data
+                      ? measurements.data.length === MEASUREMENT_PREVIEW_LIMIT
+                        ? `(showing first ${measurements.data.length})`
+                        : `(showing ${measurements.data.length})`
+                      : ""}
                   </Typography>
                   {measurements.isLoading && <CircularProgress size={24} />}
                   {measurements.isError && (

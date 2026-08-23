@@ -4,6 +4,7 @@ import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
+import com.thesis.orchestrator.dto.DatasetStatsResponse;
 import com.thesis.orchestrator.dto.DatasetUpdateRequest;
 import com.thesis.orchestrator.dto.MeasurementResponse;
 import com.thesis.orchestrator.dto.StationResponse;
@@ -72,6 +73,11 @@ public class DatasetController {
             @PathVariable UUID id,
             @RequestParam(value = "limit", defaultValue = "500") int limit) {
         return datasetService.getMeasurements(id, limit);
+    }
+
+    @GetMapping("/{id}/stats")
+    public DatasetStatsResponse getStats(@PathVariable UUID id) {
+        return datasetService.getStats(id);
     }
 
     @GetMapping

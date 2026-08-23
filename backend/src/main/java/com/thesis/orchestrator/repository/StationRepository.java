@@ -10,5 +10,7 @@ public interface StationRepository extends JpaRepository<Station, UUID> {
 
     List<Station> findByDatasetId(UUID datasetId);
 
+    long countByDatasetId(UUID datasetId);
+
     void deleteByDatasetId(UUID datasetId);
 }

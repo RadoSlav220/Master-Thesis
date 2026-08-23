@@ -3,6 +3,8 @@ import {
   CircularProgress,
   IconButton,
   Paper,
+  Slide,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -25,6 +27,7 @@ export default function Datasets() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Dataset | null>(null);
   const [toDelete, setToDelete] = useState<Dataset | null>(null);
+  const [createdName, setCreatedName] = useState<string | null>(null);
   const { data, isLoading, isError } = useDatasets();
   const del = useDeleteDataset();
   const download = useDownloadDataset();
@@ -118,7 +121,11 @@ export default function Datasets() {
           </Table>
         </Paper>
       )}
-      <DatasetForm open={createOpen} onClose={() => setCreateOpen(false)} />
+      <DatasetForm
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(name) => setCreatedName(name)}
+      />
       <DatasetForm open={!!editing} dataset={editing} onClose={() => setEditing(null)} />
       <ConfirmDialog
         open={!!toDelete}
@@ -128,6 +135,22 @@ export default function Datasets() {
         onConfirm={confirmDelete}
         onClose={() => setToDelete(null)}
       />
+      <Snackbar
+        open={!!createdName}
+        autoHideDuration={4000}
+        onClose={() => setCreatedName(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        slots={{ transition: Slide }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setCreatedName(null)}
+          sx={{ width: "100%", boxShadow: 6, borderRadius: 2 }}
+        >
+          Dataset “{createdName}” created successfully.
+        </Alert>
+      </Snackbar>
     </>
   );
 }

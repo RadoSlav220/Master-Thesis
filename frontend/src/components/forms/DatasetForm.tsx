@@ -88,9 +88,11 @@ interface DatasetFormProps {
   open: boolean;
   onClose: () => void;
   dataset?: Dataset | null;
+  /** Called after a new dataset is successfully created (create mode only). */
+  onCreated?: (name: string) => void;
 }
 
-export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps) {
+export default function DatasetForm({ open, onClose, dataset, onCreated }: DatasetFormProps) {
   const isEdit = !!dataset;
 
   // Shared metadata.
@@ -214,7 +216,12 @@ export default function DatasetForm({ open, onClose, dataset }: DatasetFormProps
     if (!name || files.length === 0 || validationErrors.length > 0) return;
     upload.mutate(
       { files, name, mapping: buildMapping(), description: description || undefined },
-      { onSuccess: onClose },
+      {
+        onSuccess: () => {
+          onCreated?.(name);
+          onClose();
+        },
+      },
     );
   };
 
