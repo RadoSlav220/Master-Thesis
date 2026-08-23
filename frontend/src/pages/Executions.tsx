@@ -29,6 +29,7 @@ import PageHeader from "../components/common/PageHeader";
 import StatusChip from "../components/common/StatusChip";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import JsonViewer from "../components/common/JsonViewer";
+import MeasurementMappingDialog from "../components/forms/MeasurementMappingDialog";
 import { useDatasets } from "../hooks/useDatasets";
 import { useComponents } from "../hooks/useComponents";
 import {
@@ -38,6 +39,7 @@ import {
   useExecutions,
 } from "../hooks/useExecutions";
 import { useSelectionStore } from "../store/selectionStore";
+import { isAxiosError } from "axios";
 import type { Execution, FilterSpec } from "../types";
 
 export default function Executions() {
@@ -61,6 +63,7 @@ export default function Executions() {
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [limit, setLimit] = useState<string>("");
   const [toDelete, setToDelete] = useState<Execution | null>(null);
+  const [mappingOpen, setMappingOpen] = useState(false);
 
   const confirmDelete = () => {
     if (!toDelete) return;
@@ -76,6 +79,7 @@ export default function Executions() {
 
   const selected = executions.data?.find((e) => e.id === selectedExecutionId) ?? null;
   const selectedDataset = datasets.data?.find((d) => d.id === selectedDatasetId) ?? null;
+  const selectedComponent = components.data?.find((c) => c.id === selectedComponentId) ?? null;
 
   // Available filter fields come from the dataset's persisted analysis.
   const availableFields = useMemo<string[]>(() => {
@@ -106,12 +110,40 @@ export default function Executions() {
     };
   };
 
-  const handleExecute = () => {
+  const runExecution = (measurementMapping?: Record<string, string>) => {
     if (!selectedDatasetId || !selectedComponentId) return;
     createExecution.mutate(
-      { datasetId: selectedDatasetId, componentId: selectedComponentId, filter: buildFilter() },
+      {
+        datasetId: selectedDatasetId,
+        componentId: selectedComponentId,
+        filter: buildFilter(),
+        ...(measurementMapping ? { measurementMapping } : {}),
+      },
       { onSuccess: (exec) => setSelectedExecution(exec.id) },
     );
+  };
+
+  const handleExecute = () => {
+    if (!selectedDatasetId || !selectedComponentId) return;
+    // Components that declare expected measurements need a mapping step first.
+    if ((selectedComponent?.expectedMeasurements?.length ?? 0) > 0) {
+      setMappingOpen(true);
+      return;
+    }
+    runExecution();
+  };
+
+  const handleMappingConfirm = (measurementMapping: Record<string, string>) => {
+    setMappingOpen(false);
+    runExecution(measurementMapping);
+  };
+
+  const executionErrorMessage = (error: unknown): string => {
+    if (isAxiosError(error)) {
+      const detail = (error.response?.data as { detail?: string } | undefined)?.detail;
+      if (detail) return detail;
+    }
+    return "Execution request failed.";
   };
 
   return (
@@ -209,7 +241,7 @@ export default function Executions() {
 
           {createExecution.isError && (
             <Alert severity="error" sx={{ mt: 2 }}>
-              Execution request failed.
+              {executionErrorMessage(createExecution.error)}
             </Alert>
           )}
         </CardContent>
@@ -331,6 +363,14 @@ export default function Executions() {
         pending={deleteExecution.isPending}
         onConfirm={confirmDelete}
         onClose={() => setToDelete(null)}
+      />
+
+      <MeasurementMappingDialog
+        open={mappingOpen}
+        datasetId={selectedDatasetId}
+        component={selectedComponent}
+        onClose={() => setMappingOpen(false)}
+        onConfirm={handleMappingConfirm}
       />
     </>
   );

@@ -83,6 +83,7 @@ export interface Component {
   inputSchema: string | null;
   outputSchema: string | null;
   description: string | null;
+  expectedMeasurements: string[];
 }
 
 export interface Execution {
@@ -93,6 +94,7 @@ export interface Execution {
   result: string | null;
   errorMessage: string | null;
   filterSpec: string | null;
+  measurementMapping: string | null;
   createdAt: string;
   finishedAt: string | null;
 }
@@ -106,6 +108,8 @@ export interface CreateExecutionRequest {
   datasetId: string;
   componentId: string;
   filter?: FilterSpec;
+  /** Component expected-measurement name -> dataset measurement column. */
+  measurementMapping?: Record<string, string>;
 }
 
 /** Structural analysis of a dataset returned by the analysis service (via backend). */

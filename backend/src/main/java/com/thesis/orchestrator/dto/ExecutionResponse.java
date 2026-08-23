@@ -13,6 +13,7 @@ public record ExecutionResponse(
         String result,
         String errorMessage,
         String filterSpec,
+        String measurementMapping,
         Instant createdAt,
         Instant finishedAt
 ) {
@@ -25,6 +26,7 @@ public record ExecutionResponse(
                 execution.getResult(),
                 execution.getErrorMessage(),
                 execution.getFilterSpec(),
+                execution.getMeasurementMapping(),
                 execution.getCreatedAt(),
                 execution.getFinishedAt()
         );

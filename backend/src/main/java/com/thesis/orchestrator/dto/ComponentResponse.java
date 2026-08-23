@@ -2,6 +2,7 @@ package com.thesis.orchestrator.dto;
 
 import com.thesis.orchestrator.domain.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 public record ComponentResponse(
@@ -10,7 +11,8 @@ public record ComponentResponse(
         String endpointUrl,
         String inputSchema,
         String outputSchema,
-        String description
+        String description,
+        List<String> expectedMeasurements
 ) {
     public static ComponentResponse from(Component component) {
         return new ComponentResponse(
@@ -19,7 +21,8 @@ public record ComponentResponse(
                 component.getEndpointUrl(),
                 component.getInputSchema(),
                 component.getOutputSchema(),
-                component.getDescription()
+                component.getDescription(),
+                component.getExpectedMeasurements()
         );
     }
 }

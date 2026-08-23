@@ -10,6 +10,7 @@ import com.thesis.orchestrator.dto.ExecutionDownload;
 import com.thesis.orchestrator.dto.ExecutionRequest;
 import com.thesis.orchestrator.dto.ExecutionResponse;
 import com.thesis.orchestrator.dto.FilterSpec;
+import com.thesis.orchestrator.exception.InvalidExecutionException;
 import com.thesis.orchestrator.exception.NotFoundException;
 import com.thesis.orchestrator.integration.ComponentClient;
 import com.thesis.orchestrator.integration.DatasetFilterClient;
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +37,7 @@ public class ExecutionService {
     private final ComponentRepository componentRepository;
     private final ComponentClient componentClient;
     private final DatasetFilterClient datasetFilterClient;
+    private final StationGeoJsonBuilder stationGeoJsonBuilder;
     private final ObjectMapper objectMapper;
 
     /**
@@ -60,9 +64,21 @@ public class ExecutionService {
         executionRepository.save(execution);
 
         try {
-            String content = applyFilterIfAny(dataset, request.filter(), execution);
-            String geoJsonContent = "GEOJSON".equalsIgnoreCase(dataset.getType()) ? content : null;
-            JsonNode geoJson = parseGeoJson(geoJsonContent);
+            JsonNode geoJson;
+            boolean stationBased = dataset.getContent() == null || dataset.getContent().isBlank();
+            if (stationBased) {
+                // Station-based (relational) dataset: map the component's expected
+                // measurements onto the dataset's measurement columns, then synthesize a
+                // GeoJSON FeatureCollection (per-station time series in feature properties).
+                Map<String, String> mapping = validateMeasurementMapping(
+                        dataset.getId(), component, request.measurementMapping());
+                persistMeasurementMapping(execution, mapping);
+                geoJson = stationGeoJsonBuilder.build(dataset.getId(), mapping);
+            } else {
+                String content = applyFilterIfAny(dataset, request.filter(), execution);
+                String geoJsonContent = "GEOJSON".equalsIgnoreCase(dataset.getType()) ? content : null;
+                geoJson = parseGeoJson(geoJsonContent);
+            }
             String result = componentClient.invoke(component.getEndpointUrl(), request.datasetId(), geoJson);
             execution.setResult(result);
             execution.setStatus(ExecutionStatus.COMPLETED);
@@ -73,6 +89,49 @@ public class ExecutionService {
         execution.setFinishedAt(Instant.now());
 
         return ExecutionResponse.from(executionRepository.save(execution));
+    }
+
+    /**
+     * Validates the caller's measurement mapping against the component's expected
+     * measurements and the dataset's available measurement columns. Every expected
+     * measurement must be mapped to a measurement column that exists in the dataset;
+     * otherwise a 400 is raised (blocking the run). Returns the validated mapping,
+     * restricted to the component's expected measurements.
+     */
+    private Map<String, String> validateMeasurementMapping(
+            UUID datasetId, Component component, Map<String, String> requested) {
+        List<String> expected = component.getExpectedMeasurements();
+        if (expected == null || expected.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> mapping = requested == null ? Map.of() : requested;
+        Set<String> availableTypes = stationGeoJsonBuilder.distinctMeasurementTypes(datasetId);
+
+        List<String> unmapped = expected.stream()
+                .filter(name -> {
+                    String column = mapping.get(name);
+                    return column == null || column.isBlank() || !availableTypes.contains(column);
+                })
+                .toList();
+        if (!unmapped.isEmpty()) {
+            throw new InvalidExecutionException(
+                    "The dataset cannot supply these expected measurements (map them to a "
+                            + "measurement column present in the dataset): " + String.join(", ", unmapped));
+        }
+        return expected.stream()
+                .collect(java.util.stream.Collectors.toMap(name -> name, mapping::get));
+    }
+
+    private void persistMeasurementMapping(Execution execution, Map<String, String> mapping) {
+        if (mapping.isEmpty()) {
+            return;
+        }
+        try {
+            execution.setMeasurementMapping(objectMapper.writeValueAsString(mapping));
+        } catch (Exception ex) {
+            // Non-fatal: provenance serialization failed; continue with the run.
+            execution.setMeasurementMapping(null);
+        }
     }
 
     /**
