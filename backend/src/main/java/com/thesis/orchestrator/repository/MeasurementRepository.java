@@ -11,6 +11,8 @@ public interface MeasurementRepository extends JpaRepository<Measurement, UUID> 
 
     List<Measurement> findByDatasetId(UUID datasetId, Pageable pageable);
 
+    List<Measurement> findAllByDatasetId(UUID datasetId);
+
     long countByDatasetId(UUID datasetId);
 
     void deleteByDatasetId(UUID datasetId);

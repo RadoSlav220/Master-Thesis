@@ -34,14 +34,14 @@ public class DemoDataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         register("Air Quality Model", "/mock-components/air-quality",
-                "Mock analytical component returning PM2.5 values as GeoJSON.");
+                "Mock analytical component returning PM2.5 values as GeoJSON.", List.of("pm25"));
         register("Traffic Model", "/mock-components/traffic",
-                "Mock analytical component returning congestion values as GeoJSON.");
+                "Mock analytical component returning congestion values as GeoJSON.", List.of("congestion"));
         registerUsgsEarthquakeSource();
         registerGeoapifyIsolineSource();
     }
 
-    private void register(String name, String path, String description) {
+    private void register(String name, String path, String description, List<String> expectedMeasurements) {
         String endpointUrl = mockBaseUrl + path;
         if (componentRepository.existsByEndpointUrl(endpointUrl)) {
             return;
@@ -50,6 +50,7 @@ public class DemoDataInitializer implements CommandLineRunner {
                 .name(name)
                 .endpointUrl(endpointUrl)
                 .description(description)
+                .expectedMeasurements(new java.util.ArrayList<>(expectedMeasurements))
                 .build());
         log.info("Demo bootstrap: registered component '{}' -> {}", name, endpointUrl);
     }
