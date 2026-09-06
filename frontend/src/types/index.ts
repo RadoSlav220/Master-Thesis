@@ -93,21 +93,14 @@ export interface Execution {
   status: ExecutionStatus;
   result: string | null;
   errorMessage: string | null;
-  filterSpec: string | null;
   measurementMapping: string | null;
   createdAt: string;
   finishedAt: string | null;
 }
 
-export interface FilterSpec {
-  columns: string[];
-  limit?: number;
-}
-
 export interface CreateExecutionRequest {
   datasetId: string;
   componentId: string;
-  filter?: FilterSpec;
   /** Component expected-measurement name -> dataset measurement column. */
   measurementMapping?: Record<string, string>;
 }

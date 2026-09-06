@@ -36,11 +36,6 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
     }
 
-    @ExceptionHandler(DatasetFilterException.class)
-    public ProblemDetail handleDatasetFilter(DatasetFilterException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
-    }
-
     @ExceptionHandler(DataSourceFetchException.class)
     public ProblemDetail handleDataSourceFetch(DataSourceFetchException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());

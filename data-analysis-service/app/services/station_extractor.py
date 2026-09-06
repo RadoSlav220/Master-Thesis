@@ -43,7 +43,10 @@ _VALID_ROLES = {
     MEASUREMENT,
     IGNORE,
 }
-_REQUIRED_SINGLE_ROLES = (STATION_ID, LATITUDE, LONGITUDE)
+# Roles that must appear exactly once in every file. Latitude/longitude are no
+# longer per-file: a dataset's files are joined by station id, so coordinates
+# only need to be present in *some* file for each station (checked after merge).
+_REQUIRED_SINGLE_ROLES = (STATION_ID,)
 
 
 class InvalidMappingError(ValueError):
@@ -83,6 +86,17 @@ def _validate_mapping(filename: str, columns: dict[str, str], headers: list[str]
             raise InvalidMappingError(
                 f"{filename!r}: exactly one {role} column is required (found {count})."
             )
+    lat_count = sum(1 for r in columns.values() if r == LATITUDE)
+    lon_count = sum(1 for r in columns.values() if r == LONGITUDE)
+    if lat_count > 1 or lon_count > 1:
+        raise InvalidMappingError(
+            f"{filename!r}: at most one LATITUDE and one LONGITUDE column are allowed."
+        )
+    if lat_count != lon_count:
+        raise InvalidMappingError(
+            f"{filename!r}: LATITUDE and LONGITUDE must be mapped together "
+            f"(a file may have both or neither)."
+        )
     has_measurement = any(r == MEASUREMENT for r in columns.values())
     has_timestamp = any(r == TIMESTAMP for r in columns.values())
     if has_measurement and not has_timestamp:
@@ -123,9 +137,12 @@ def extract(
     """Extracts stations + measurements from the uploaded files.
 
     ``files`` is a list of (filename, raw_bytes). ``mapping`` maps each filename
-    to a {column -> role} dict. Stations are deduplicated by their external id
-    across all files (first-seen coordinates win; conflicts are reported as
-    warnings). Measurements are emitted in long format.
+    to a {column -> role} dict. Files are joined by station id: stations are
+    deduplicated by their external id across all files, and coordinates only need
+    to appear in *some* file for each station (a measurement-only file may omit
+    them and be backfilled from another file). Conflicting coordinates keep the
+    first-seen value (reported as a warning); a station with no coordinates in any
+    file is an error. Measurements are emitted in long format.
     """
     if not files:
         raise InvalidMappingError("At least one file is required.")
@@ -160,8 +177,8 @@ def extract(
                 continue
 
             existing = stations.get(station_id)
-            lat = _to_float(row[lat_col])
-            lon = _to_float(row[lon_col])
+            lat = _to_float(row[lat_col]) if lat_col is not None else None
+            lon = _to_float(row[lon_col]) if lon_col is not None else None
             attributes = {
                 col: _clean_str(row[col])
                 for col in attr_cols
@@ -186,6 +203,15 @@ def extract(
                         f"Station {station_id!r} has conflicting coordinates across rows; "
                         f"keeping the first-seen ({existing.latitude}, {existing.longitude})."
                     )
+                elif (
+                    lat is not None
+                    and lon is not None
+                    and (existing.latitude is None or existing.longitude is None)
+                ):
+                    # Station was first seen without coordinates (e.g. in a
+                    # measurement-only file); backfill from this file.
+                    existing.latitude = lat
+                    existing.longitude = lon
                 for key, val in attributes.items():
                     existing.attributes.setdefault(key, val)
 
@@ -208,6 +234,18 @@ def extract(
                         valueNumeric=_to_float(row[col]),
                     )
                 )
+
+    missing_coords = sorted(
+        s.stationExternalId
+        for s in stations.values()
+        if s.latitude is None or s.longitude is None
+    )
+    if missing_coords:
+        raise InvalidMappingError(
+            "No coordinates found for station(s) "
+            f"{', '.join(repr(sid) for sid in missing_coords)}: every station needs "
+            "a LATITUDE and LONGITUDE in at least one uploaded file."
+        )
 
     return ExtractionResponse(
         stations=list(stations.values()),

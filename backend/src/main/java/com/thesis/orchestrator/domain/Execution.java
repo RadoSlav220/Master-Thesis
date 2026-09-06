@@ -45,10 +45,6 @@ public class Execution {
     @Column(columnDefinition = "text")
     private String errorMessage;
 
-    /** The filter applied before invoking the component, if any (JSON, provenance). */
-    @Column(columnDefinition = "text")
-    private String filterSpec;
-
     /** The measurement mapping applied before invoking the component, if any (JSON, provenance). */
     @Column(columnDefinition = "text")
     private String measurementMapping;
