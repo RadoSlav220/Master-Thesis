@@ -49,10 +49,6 @@ public class Execution {
     @Column(columnDefinition = "text")
     private String measurementMapping;
 
-    /** The measurement mapping applied before invoking the component, if any (JSON, provenance). */
-    @Column(columnDefinition = "text")
-    private String measurementMapping;
-
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
