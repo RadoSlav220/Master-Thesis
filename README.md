@@ -38,8 +38,7 @@ readiness**: the whole system runs with a single command.
                   |                                      Analysis Service
                   |  1. fetch snapshot from a Data       (FastAPI + Pandas)
                   |     Source (mock external API)        - /analyze (structure)
-                  |  2. auto-analyze + persist            - /filter  (subset)
-                  |  3. (optional) filter before run
+                  |  2. auto-analyze + persist            - /extract-stations
                   v
        External Analytical Components (mock)
                   |  GeoJSON FeatureCollection
@@ -52,11 +51,11 @@ readiness**: the whole system runs with a single command.
 
 The pipeline: register a **Data Source** → **fetch** a dataset snapshot for a time
 period → the backend **auto-analyzes** it (via the Python service) and **persists** the
-result → optionally **filter** (select columns/properties + row limit) → run an
-analytical **component** → visualize the GeoJSON result on the map.
+result → **map** the dataset's measurements to an analytical **component**'s expected
+measurements → run the component → visualize the GeoJSON result on the map.
 
 The frontend talks only to the backend REST API. The backend orchestrates external
-components, delegates data-processing (structure analysis and filtering) to the Python
+components, delegates data-processing (structure analysis) to the Python
 service, and persists data sources / datasets / executions in PostgreSQL. Analytical
 logic stays in the (currently mock) external components and the specialized Python
 service.
@@ -124,8 +123,8 @@ one:
 3. **Inspect the dataset** — open its details to see metadata, the persisted analysis
    (columns/properties), geometry types, and a map preview.
 4. **Execute a component** — Executions → pick the dataset + a component (Air Quality /
-   Traffic) → optionally **filter** (tick which columns/properties to include, set a row
-   limit) → *Execute*.
+   Traffic) → map the dataset's measurements to the component's expected measurements →
+   *Execute*.
 5. **Visualize results** — Map → *Result* mode → select the execution to see the
    returned GeoJSON features colored by value, plus a chart.
 
@@ -159,7 +158,7 @@ committed — provide the password via a git-ignored
 `-Dspring-boot.run.profiles=local`) or `export DB_PASSWORD=...`.
 
 The API starts on `http://localhost:8080` (`Started OrchestratorApplication` in logs).
-Analysis/filtering delegate to the Python service (default `http://localhost:8000`),
+Analysis delegates to the Python service (default `http://localhost:8000`),
 so start that too if you exercise those features.
 
 ### Dataset analysis service
@@ -215,11 +214,11 @@ curl -X POST http://localhost:8080/data-sources/<source-id>/fetch \
   -H "Content-Type: application/json" \
   -d '{"name":"AQ Snapshot","startDate":"2026-07-01","endDate":"2026-07-05"}'
 
-# Trigger an execution, optionally filtering the dataset first
+# Trigger an execution, mapping the dataset's measurements to the component's expected ones
 curl -X POST http://localhost:8080/executions \
   -H "Content-Type: application/json" \
   -d '{"datasetId":"<dataset-id>","componentId":"<component-id>",
-       "filter":{"columns":["pm25"],"limit":2}}'
+       "measurementMapping":{"pm25":"pm25"}}'
 
 # List executions
 curl http://localhost:8080/executions
@@ -343,33 +342,24 @@ the Python service.
 ## Dataset analysis service
 
 A standalone **Python (FastAPI)** microservice handles data-processing so the backend
-stays a pure orchestrator. It inspects dataset structure and filters datasets. See
-[`data-analysis-service/`](data-analysis-service/).
+stays a pure orchestrator. It inspects dataset structure and extracts stations from CSV
+uploads. See [`data-analysis-service/`](data-analysis-service/).
 
 - **`POST /analyze`** (multipart `file`) → `{ "datasetType": "CSV", "columns": [...] }`
   or `{ "datasetType": "GEOJSON", "properties": [...] }`.
-- **`POST /filter`** (multipart `file` + `columns` + `limit`) → reduces the dataset to
-  the selected columns/properties and caps rows/features, returning
-  `{ "datasetType", "content" }`.
+- **`POST /extract-stations`** (multipart `files` + `mapping`) → parses station CSV files
+  into relational stations + long-format measurements.
 
 How the backend uses it:
 
 - **Analysis** — persisted automatically on fetch; also re-runnable via
   `POST /datasets/{id}/analyze` (the Dataset Details **Analyze** button).
-- **Filtering** — when an execution request includes a `filter`
-  (`{ "columns": [...], "limit": N }`), the backend sends the dataset content to
-  `/filter` first and passes the **filtered** content to the component. The applied
-  filter is persisted on the execution (`filterSpec`) for provenance. On the Executions
-  page, the filter options come from the dataset's stored analysis (checkboxes + a row
-  limit).
+- **Station extraction** — station-based CSV uploads are transformed into the dataset's
+  stored representation via `/extract-stations`.
 
 Configured via `dataset.analysis.service.url` (env `DATASET_ANALYSIS_SERVICE_URL`,
 default `http://localhost:8000`). The service is included in `docker-compose.yml`, so
 `docker compose up --build` runs it alongside the rest of the stack.
-
-> **v1 note:** filtering feeds the mock model end-to-end for **GeoJSON** datasets. CSV
-> filtering works in the service and is stored/shown, but the current mock components
-> consume GeoJSON, so CSV → model is deferred.
 
 ## Frontend
 
@@ -408,7 +398,7 @@ npm run build        # type-check + production build into frontend/dist
 | Datasets        | List datasets; upload a GeoJSON file or create a plain dataset      |
 | Dataset Details | Metadata, persisted analysis, feature count, geometry types, map preview |
 | Components      | List components; register one (name, endpoint URL, description)     |
-| Executions      | Select a dataset + component, optionally **filter** (columns + row limit), execute, view result |
+| Executions      | Select a dataset + component, map the dataset's measurements to the component's expected ones, execute, view result |
 | Map             | Two modes — **Dataset** (preview geometry) and **Result** (execution output) — rendered as GeoJSON layers with a values chart |
 
 ### GeoJSON rendering

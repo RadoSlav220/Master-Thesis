@@ -172,9 +172,13 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
     }));
   };
 
-  // Every file needs exactly one STATION_ID / LATITUDE / LONGITUDE (backend re-validates).
+  // Files are joined by station id: every file needs exactly one STATION_ID,
+  // Latitude/Longitude must be mapped together (both or neither) per file, and
+  // at least one file in the dataset must provide coordinates. The backend
+  // re-validates and additionally checks every station id gets coordinates.
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
+    let datasetHasCoords = false;
     for (const f of files) {
       const key = fileKey(f);
       const fileRoles = roles[key] ?? {};
@@ -184,14 +188,28 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
       }
       const hasMeasurement = Object.values(fileRoles).includes("MEASUREMENT");
       const hasTimestamp = Object.values(fileRoles).includes("TIMESTAMP");
-      (["STATION_ID", "LATITUDE", "LONGITUDE"] as const).forEach((role) => {
-        if (counts[role] !== 1) {
-          errors.push(`${f.name}: needs exactly one ${ROLE_LABELS[role]} column.`);
-        }
-      });
+      if (counts.STATION_ID !== 1) {
+        errors.push(`${f.name}: needs exactly one ${ROLE_LABELS.STATION_ID} column.`);
+      }
+      if (counts.LATITUDE > 1 || counts.LONGITUDE > 1) {
+        errors.push(
+          `${f.name}: at most one ${ROLE_LABELS.LATITUDE} and one ${ROLE_LABELS.LONGITUDE} column.`,
+        );
+      } else if (counts.LATITUDE !== counts.LONGITUDE) {
+        errors.push(
+          `${f.name}: ${ROLE_LABELS.LATITUDE} and ${ROLE_LABELS.LONGITUDE} must be mapped together.`,
+        );
+      } else if (counts.LATITUDE === 1) {
+        datasetHasCoords = true;
+      }
       if (hasMeasurement && !hasTimestamp) {
         errors.push(`${f.name}: a Timestamp column is required when there are measurements.`);
       }
+    }
+    if (files.length > 0 && !datasetHasCoords) {
+      errors.push(
+        `At least one file must provide ${ROLE_LABELS.LATITUDE} and ${ROLE_LABELS.LONGITUDE} columns.`,
+      );
     }
     return errors;
   }, [files, roles]);

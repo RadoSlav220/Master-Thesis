@@ -20,7 +20,7 @@ and the reasoning behind key decisions.
 - `frontend/` — React + TypeScript (Vite; nginx in Docker). MUI, Axios, TanStack React
   Query, Zustand, React Router, MapLibre GL JS, Recharts.
 - `data-analysis-service/` — Python 3.12 FastAPI + Pandas microservice (structure
-  analysis + filtering). Uses ruff + pytest.
+  analysis). Uses ruff + pytest.
 - `docker-compose.yml` (postgres + backend + frontend + data-analysis-service),
   `.env.example`, `sample-data/` (Sofia GeoJSON samples).
 - Each subproject has its **own `.gitignore`** (language/build rules); the root
@@ -31,8 +31,8 @@ and the reasoning behind key decisions.
 
 ## The pipeline (the thesis story)
 
-**Manual CSV upload** of station + measurement data → **auto-analyze + persist** → optional
-**filter** (column/property selection + row limit) → run an analytical **component** →
+**Manual CSV upload** of station + measurement data → **auto-analyze + persist** → **map** the
+dataset's measurements to a **component**'s expected measurements → run the analytical component →
 **visualize** the GeoJSON result on MapLibre. Analytical models are **mocked** for now, and
 **components are predefined** (users cannot register them).
 
@@ -45,8 +45,8 @@ scope note below.
 
 ## Key decisions and the "why" (read before changing related code)
 
-- **Orchestration boundary** — data processing (analysis, filtering) is delegated to the
-  Python service; the backend never does it itself. Preserve this separation.
+- **Orchestration boundary** — data processing (structure analysis, station extraction) is
+  delegated to the Python service; the backend never does it itself. Preserve this separation.
 - **Backend → Python HTTP client** — Spring `RestClient` **pinned to HTTP/1.1**
   (`JdkClientHttpRequestFactory` with `HttpClient.Version.HTTP_1_1`). The JDK client's
   default HTTP/2 upgrade corrupts multipart requests to uvicorn (422 / "invalid HTTP
@@ -113,9 +113,15 @@ scope note below.
   `endDate`/`end`/`to`) when present, else falls back to a default last-24h window.
   (The earlier typed `Instant` window + MUI `DateTimePicker` approach was replaced by
   this generic query-parameter model.)
-- **Filtering (v1)** — column/property selection + row limit only (no value predicates).
-  The applied filter is persisted on the execution as `filterSpec`. Filtered data feeds
-  the model end-to-end for **GeoJSON**; CSV → model is deferred (mock components consume GeoJSON).
+- **Measurement mapping** — each predefined component declares a set of **expected measurements**
+  (`Component.expectedMeasurements`, seeded in the `demo` profile). When running a component against a
+  **station-based** dataset, the user maps the dataset's measurement columns onto the component's
+  expected names; execution is **blocked (400, `InvalidExecutionException`)** if any expected
+  measurement is unmapped. The chosen mapping is persisted on the execution as `measurementMapping`
+  (JSON provenance). For station-based datasets `StationGeoJsonBuilder` then synthesizes a GeoJSON
+  FeatureCollection embedding each mapped measurement's **full time series** in feature properties;
+  content-based GeoJSON datasets pass their stored content through unchanged. (This replaced the earlier
+  v1 filter — column/row selection — which was redundant once mapping governs what reaches the model.)
 - **Mock components** — `/mock-components/air-quality` and `/traffic` return GeoJSON
   FeatureCollections. A `demo` Spring profile auto-registers them on startup. (Components are
   **predefined/seeded**, not user-registered — see the "Components are predefined" decision above.)

@@ -55,7 +55,21 @@ def test_station_attribute_collected():
     assert result.measurements == []
 
 
-def test_missing_required_role_raises():
+def test_missing_station_id_raises():
+    csv = b"lat,lon,ts,pm25\n1.0,2.0,2024-01-01T00:00:00Z,10\n"
+    mapping = {
+        "s.csv": {
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+        }
+    }
+    with pytest.raises(InvalidMappingError):
+        station_extractor.extract([("s.csv", csv)], mapping)
+
+
+def test_longitude_without_latitude_raises():
     csv = b"station,lon,ts,pm25\nS1,23.3,2024-01-01T00:00:00Z,10\n"
     mapping = {
         "s.csv": {
@@ -156,6 +170,45 @@ def test_multi_file_merges_stations():
     result = station_extractor.extract([("a.csv", file_a), ("b.csv", file_b)], mapping)
     assert len(result.stations) == 1
     assert len(result.measurements) == 2
+
+
+def test_measurement_only_file_backfilled_from_stations_file():
+    stations_file = b"station,lat,lon\nS1,1.0,2.0\n"
+    measurements_file = b"station,ts,pm25\nS1,2024-01-01T00:00:00Z,10\n"
+    mapping = {
+        "stations.csv": {
+            "station": "STATION_ID",
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+        },
+        "measurements.csv": {
+            "station": "STATION_ID",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+        },
+    }
+    result = station_extractor.extract(
+        [("measurements.csv", measurements_file), ("stations.csv", stations_file)],
+        mapping,
+    )
+    assert len(result.stations) == 1
+    station = result.stations[0]
+    assert station.latitude == 1.0
+    assert station.longitude == 2.0
+    assert len(result.measurements) == 1
+
+
+def test_station_without_coords_anywhere_raises():
+    measurements_file = b"station,ts,pm25\nS1,2024-01-01T00:00:00Z,10\n"
+    mapping = {
+        "measurements.csv": {
+            "station": "STATION_ID",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+        },
+    }
+    with pytest.raises(InvalidMappingError):
+        station_extractor.extract([("measurements.csv", measurements_file)], mapping)
 
 
 def test_no_mapping_for_file_raises():
