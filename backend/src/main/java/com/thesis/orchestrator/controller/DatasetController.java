@@ -97,7 +97,7 @@ public class DatasetController {
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<String> download(@PathVariable UUID id) {
+    public ResponseEntity<byte[]> download(@PathVariable UUID id) {
         DatasetDownload download = datasetService.download(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,

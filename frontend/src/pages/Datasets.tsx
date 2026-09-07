@@ -21,6 +21,7 @@ import PageHeader from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import DatasetForm from "../components/forms/DatasetForm";
 import { useDatasets, useDeleteDataset, useDownloadDataset } from "../hooks/useDatasets";
+import { isDownloadable } from "../utils/datasetHelpers";
 import type { Dataset } from "../types";
 
 export default function Datasets() {
@@ -74,7 +75,7 @@ export default function Datasets() {
                   <TableCell>{d.description ?? "—"}</TableCell>
                   <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                   <TableCell align="right">
-                    {d.hasContent && (
+                    {isDownloadable(d) && (
                       <IconButton
                         size="small"
                         aria-label="download dataset"
