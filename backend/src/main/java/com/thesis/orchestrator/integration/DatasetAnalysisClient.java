@@ -89,9 +89,12 @@ public class DatasetAnalysisClient {
      * Sends one or more CSV files plus a column-role mapping to the analysis service's
      * {@code /extract-stations} endpoint and returns the extracted stations + long-format
      * measurements. Each file becomes a repeated {@code files} multipart part; the mapping
-     * is sent as a plain-text {@code mapping} form field (a JSON string).
+     * is sent as a plain-text {@code mapping} form field (a JSON string). An optional
+     * {@code renamesJson} (canonical measurement-column names, keyed by filename) is sent
+     * as a {@code renames} form field only when present.
      */
-    public StationExtractionResponse extractStations(List<MultipartFile> files, String mappingJson) {
+    public StationExtractionResponse extractStations(
+            List<MultipartFile> files, String mappingJson, String renamesJson) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         for (MultipartFile file : files) {
             String filename = file.getOriginalFilename();
@@ -112,6 +115,9 @@ public class DatasetAnalysisClient {
             body.add("files", new HttpEntity<>(resource, partHeaders));
         }
         body.add("mapping", mappingJson);
+        if (renamesJson != null && !renamesJson.isBlank()) {
+            body.add("renames", renamesJson);
+        }
 
         try {
             return restClient.post()

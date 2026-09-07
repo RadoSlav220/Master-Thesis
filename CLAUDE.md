@@ -80,6 +80,11 @@ scope note below.
   Rationale for choosing upload over live fetch: real sensor APIs split station metadata and
   measurements across separate endpoints (would force users to describe a whole fetch pipeline),
   and HTTP fetching is fragile — too complex for now. Tracked as epic #63 (sub-issues #64/#65/#66).
+  During mapping the user may also give any **MEASUREMENT** column a **canonical name** (default =
+  the header), so differently-named columns for the same quantity (`pm25` vs `PM2.5`) unify into a
+  single `measurementType`. This travels as an optional `renames` map (`{filename: {column: name}}`)
+  alongside the role `mapping`, applied in the Python extractor; measurements are deduplicated by
+  `(stationExternalId, timestamp, measurementType)` with **last-value-wins** on a collision. Issue #79.
 - **Components are predefined** — users **cannot** register or edit analytical components
   (mentor meeting 2026-08-22). Predefined components are **seeded** (the `demo` profile
   auto-registers the mocks; real ones arrive via the "real components" epic). The user-facing

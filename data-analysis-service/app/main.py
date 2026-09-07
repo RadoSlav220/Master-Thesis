@@ -39,10 +39,13 @@ async def analyze(file: UploadFile = File(...)) -> AnalysisResponse:
 async def extract_stations(
     files: list[UploadFile] = File(...),
     mapping: str = Form(...),
+    renames: str = Form(""),
 ) -> ExtractionResponse:
     """Parses station CSV files into relational stations + long-format measurements.
 
     ``mapping`` is a JSON object keyed by filename: {"<file>": {"<col>": "<ROLE>"}}.
+    ``renames`` is an optional JSON object keyed by filename mapping MEASUREMENT
+    columns to a canonical name: {"<file>": {"<col>": "<name>"}}.
     """
     try:
         parsed_mapping = json.loads(mapping)
@@ -53,12 +56,23 @@ async def extract_stations(
             status_code=400, detail="mapping must be a JSON object keyed by filename."
         )
 
+    parsed_renames: dict = {}
+    if renames.strip():
+        try:
+            parsed_renames = json.loads(renames)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid renames JSON: {exc}") from exc
+        if not isinstance(parsed_renames, dict):
+            raise HTTPException(
+                status_code=400, detail="renames must be a JSON object keyed by filename."
+            )
+
     payload: list[tuple[str, bytes]] = []
     for upload in files:
         raw = await upload.read()
         payload.append((upload.filename or "", raw))
 
     try:
-        return station_extractor.extract(payload, parsed_mapping)
+        return station_extractor.extract(payload, parsed_mapping, parsed_renames)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

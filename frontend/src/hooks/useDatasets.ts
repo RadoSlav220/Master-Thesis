@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { datasetApi } from "../api/datasetApi";
 import type {
   CreateDatasetRequest,
+  StationMeasurementRenames,
   StationUploadMapping,
   UpdateDatasetRequest,
 } from "../types";
@@ -53,7 +54,15 @@ export function useUploadStations() {
       name: string;
       mapping: StationUploadMapping;
       description?: string;
-    }) => datasetApi.uploadStations(vars.files, vars.name, vars.mapping, vars.description),
+      renames?: StationMeasurementRenames;
+    }) =>
+      datasetApi.uploadStations(
+        vars.files,
+        vars.name,
+        vars.mapping,
+        vars.description,
+        vars.renames,
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

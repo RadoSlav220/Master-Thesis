@@ -214,3 +214,88 @@ def test_station_without_coords_anywhere_raises():
 def test_no_mapping_for_file_raises():
     with pytest.raises(InvalidMappingError):
         station_extractor.extract([("s.csv", b"station,lat,lon\nS1,1,2\n")], {})
+
+
+def test_rename_unifies_columns_within_a_file():
+    csv = b"station,lat,lon,ts,pm25,PM2.5\nS1,1.0,2.0,2024-01-01T00:00:00Z,12,13\n"
+    mapping = {
+        "s.csv": {
+            "station": "STATION_ID",
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+            "PM2.5": "MEASUREMENT",
+        }
+    }
+    # Both measurement columns renamed to the same canonical type; same
+    # station+timestamp, so they collide and the later column ("PM2.5") wins.
+    renames = {"s.csv": {"pm25": "pm25", "PM2.5": "pm25"}}
+    result = station_extractor.extract([("s.csv", csv)], mapping, renames)
+
+    assert {m.measurementType for m in result.measurements} == {"pm25"}
+    assert len(result.measurements) == 1
+    assert result.measurements[0].value == "13"
+
+
+def test_rename_merges_across_files_last_wins():
+    file_a = b"station,lat,lon,ts,pm25\nS1,1.0,2.0,2024-01-01T00:00:00Z,12\n"
+    file_b = b"station,ts,PM2.5\nS1,2024-01-01T00:00:00Z,99\n"
+    mapping = {
+        "a.csv": {
+            "station": "STATION_ID",
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+        },
+        "b.csv": {
+            "station": "STATION_ID",
+            "ts": "TIMESTAMP",
+            "PM2.5": "MEASUREMENT",
+        },
+    }
+    renames = {"a.csv": {"pm25": "pm25"}, "b.csv": {"PM2.5": "pm25"}}
+    # b.csv is processed after a.csv, so its value wins on the collision.
+    result = station_extractor.extract(
+        [("a.csv", file_a), ("b.csv", file_b)], mapping, renames
+    )
+
+    assert len(result.measurements) == 1
+    assert result.measurements[0].measurementType == "pm25"
+    assert result.measurements[0].value == "99"
+
+
+def test_no_renames_preserves_original_types():
+    csv = b"station,lat,lon,ts,pm25,PM2.5\nS1,1.0,2.0,2024-01-01T00:00:00Z,12,13\n"
+    mapping = {
+        "s.csv": {
+            "station": "STATION_ID",
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+            "PM2.5": "MEASUREMENT",
+        }
+    }
+    result = station_extractor.extract([("s.csv", csv)], mapping)
+
+    assert {m.measurementType for m in result.measurements} == {"pm25", "PM2.5"}
+    assert len(result.measurements) == 2
+
+
+def test_blank_rename_falls_back_to_header():
+    csv = b"station,lat,lon,ts,pm25\nS1,1.0,2.0,2024-01-01T00:00:00Z,12\n"
+    mapping = {
+        "s.csv": {
+            "station": "STATION_ID",
+            "lat": "LATITUDE",
+            "lon": "LONGITUDE",
+            "ts": "TIMESTAMP",
+            "pm25": "MEASUREMENT",
+        }
+    }
+    renames = {"s.csv": {"pm25": "  "}}
+    result = station_extractor.extract([("s.csv", csv)], mapping, renames)
+
+    assert result.measurements[0].measurementType == "pm25"

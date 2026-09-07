@@ -49,6 +49,13 @@ export type ColumnRole =
 /** Per-file column-role mapping sent with a station upload: filename -> (column -> role). */
 export type StationUploadMapping = Record<string, Record<string, ColumnRole>>;
 
+/**
+ * Optional per-file canonical names for MEASUREMENT columns, sent with a station
+ * upload: filename -> (column -> canonical measurement name). Columns renamed to the
+ * same name are unified into one measurement type.
+ */
+export type StationMeasurementRenames = Record<string, Record<string, string>>;
+
 export interface Station {
   id: string;
   stationExternalId: string;

@@ -117,7 +117,8 @@ public class DatasetService {
      */
     @Transactional
     public DatasetResponse uploadStations(
-            List<MultipartFile> files, String name, String description, String mappingJson) {
+            List<MultipartFile> files, String name, String description,
+            String mappingJson, String renamesJson) {
         if (files == null || files.isEmpty() || files.stream().allMatch(MultipartFile::isEmpty)) {
             throw new InvalidUploadException("At least one file is required.");
         }
@@ -129,7 +130,8 @@ public class DatasetService {
         }
 
         // Parse + validate in the Python service before persisting anything.
-        StationExtractionResponse extraction = datasetAnalysisClient.extractStations(files, mappingJson);
+        StationExtractionResponse extraction =
+                datasetAnalysisClient.extractStations(files, mappingJson, renamesJson);
 
         Dataset dataset = datasetRepository.save(Dataset.builder()
                 .name(name)
