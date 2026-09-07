@@ -199,6 +199,7 @@ Additional endpoints:
 | `POST /data-sources/{id}/fetch`  | Fetch a dataset snapshot for a period; auto-analyze + store |
 | `POST /datasets/upload`          | Multipart upload of a GeoJSON file                          |
 | `GET /datasets/{id}/geojson`     | The stored GeoJSON FeatureCollection                        |
+| `GET /datasets/{id}/download`    | Download the dataset as a file: content-based datasets as a single CSV/GeoJSON; station-based datasets as a `.zip` of `stations.csv` + `measurements.csv` (round-trippable via Create Dataset) |
 | `POST /datasets/{id}/analyze`    | (Re-)run structure analysis via the Python service          |
 
 ### Example

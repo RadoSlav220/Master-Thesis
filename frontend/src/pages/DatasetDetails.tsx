@@ -36,6 +36,7 @@ import {
   useDownloadDataset,
 } from "../hooks/useDatasets";
 import { detectValueProperty, geometryTypes } from "../utils/resultParser";
+import { isDownloadable, isStationDataset } from "../utils/datasetHelpers";
 import type { GeoJsonFeature, GeoJsonFeatureCollection } from "../types";
 
 /** Max measurement rows shown in the dataset detail preview table. */
@@ -73,14 +74,11 @@ export default function DatasetDetails() {
   // not as file content — so it has no GeoJSON, no persisted analysis, and its
   // Download/Analyze actions would fail on null content. Detect it and show the
   // relational tables instead.
-  const isStationDataset =
-    dataset.data?.datasetOrigin === "UPLOAD" &&
-    !dataset.data?.hasGeoJson &&
-    !dataset.data?.analysisResult;
+  const isStation = dataset.data ? isStationDataset(dataset.data) : false;
 
-  const stations = useDatasetStations(isStationDataset ? id : null);
-  const measurements = useDatasetMeasurements(isStationDataset ? id : null, MEASUREMENT_PREVIEW_LIMIT);
-  const stats = useDatasetStats(isStationDataset ? id : null);
+  const stations = useDatasetStations(isStation ? id : null);
+  const measurements = useDatasetMeasurements(isStation ? id : null, MEASUREMENT_PREVIEW_LIMIT);
+  const stats = useDatasetStats(isStation ? id : null);
 
   // Build a point FeatureCollection from the stations so they render on the map
   // (dots + click-to-show-metadata popup). Stations without coordinates are skipped.
@@ -109,8 +107,8 @@ export default function DatasetDetails() {
   const plottableStationCount = stationFeatureCollection?.features.length ?? 0;
 
   const canAnalyze =
-    !isStationDataset && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
-  const canDownload = dataset.data?.hasContent ?? false;
+    !isStation && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
+  const canDownload = dataset.data ? isDownloadable(dataset.data) : false;
 
   const provenance = dataset.data?.provenance ?? null;
   const queryParamEntries =
@@ -136,7 +134,7 @@ export default function DatasetDetails() {
 
       {download.isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Download failed — the dataset may have no content.
+          Download failed — the dataset may be empty or unavailable.
         </Alert>
       )}
 
@@ -264,7 +262,7 @@ export default function DatasetDetails() {
             </Card>
           )}
 
-          {isStationDataset && (
+          {isStation && (
             <>
               {stats.data && (
                 <Card>

@@ -85,6 +85,11 @@ scope note below.
   single `measurementType`. This travels as an optional `renames` map (`{filename: {column: name}}`)
   alongside the role `mapping`, applied in the Python extractor; measurements are deduplicated by
   `(stationExternalId, timestamp, measurementType)` with **last-value-wins** on a collision. Issue #79.
+  **Download** (`GET /datasets/{id}/download`): a station-based dataset has no `content`, so it is
+  reconstructed in the backend (`StationCsvZipBuilder`) as a **`.zip` of `stations.csv` +
+  `measurements.csv`** — measurements **wide** (one column per `measurementType`), headers named so
+  the archive round-trips back through Create Dataset. Content-based datasets still download as a
+  single CSV/GeoJSON file. Issue #72.
 - **Components are predefined** — users **cannot** register or edit analytical components
   (mentor meeting 2026-08-22). Predefined components are **seeded** (the `demo` profile
   auto-registers the mocks; real ones arrive via the "real components" epic). The user-facing

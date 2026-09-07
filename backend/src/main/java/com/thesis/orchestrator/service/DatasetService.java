@@ -51,6 +51,7 @@ public class DatasetService {
     private final MeasurementRepository measurementRepository;
     private final ObjectMapper objectMapper;
     private final DatasetAnalysisClient datasetAnalysisClient;
+    private final StationCsvZipBuilder stationCsvZipBuilder;
 
     public DatasetResponse create(DatasetRequest request) {
         Dataset dataset = Dataset.builder()
@@ -250,18 +251,26 @@ public class DatasetService {
     }
 
     /**
-     * Returns a dataset's raw content packaged for download: the content plus the
-     * filename ("&lt;name&gt;.&lt;ext&gt;") and content type derived from its type.
+     * Packages a dataset for download. A content-based dataset (CSV/GeoJSON) is returned as
+     * a single file ("&lt;name&gt;.&lt;ext&gt;"). A station-based dataset (no content; data
+     * in the relational {@code stations}/{@code measurements} tables) is returned as a
+     * "&lt;name&gt;.zip" archive of {@code stations.csv} + {@code measurements.csv}. A
+     * dataset with neither content nor stations 404s.
      */
     public DatasetDownload download(UUID id) {
         Dataset dataset = findEntity(id);
         String content = dataset.getContent();
-        if (content == null || content.isBlank()) {
-            throw new NotFoundException("Dataset has no downloadable content: " + id);
+        if (content != null && !content.isBlank()) {
+            String filename = dataset.getName() + extensionFor(dataset.getType());
+            String contentType =
+                    "CSV".equalsIgnoreCase(dataset.getType()) ? "text/csv" : "application/geo+json";
+            return new DatasetDownload(content.getBytes(StandardCharsets.UTF_8), filename, contentType);
         }
-        String filename = dataset.getName() + extensionFor(dataset.getType());
-        String contentType = "CSV".equalsIgnoreCase(dataset.getType()) ? "text/csv" : "application/geo+json";
-        return new DatasetDownload(content, filename, contentType);
+        if (stationRepository.countByDatasetId(id) > 0) {
+            byte[] zip = stationCsvZipBuilder.build(id);
+            return new DatasetDownload(zip, dataset.getName() + ".zip", "application/zip");
+        }
+        throw new NotFoundException("Dataset has no downloadable content: " + id);
     }
 
     /** Maps a dataset type to a filename extension the analysis service recognizes. */
