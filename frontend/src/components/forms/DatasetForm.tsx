@@ -17,6 +17,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableRow,
   Tabs,
   TextField,
@@ -27,7 +28,7 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { isAxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { useUpdateDataset, useUploadStations } from "../../hooks/useDatasets";
-import type { ColumnRole, Dataset, StationUploadMapping } from "../../types";
+import type { ColumnRole, Dataset, StationMeasurementRenames, StationUploadMapping } from "../../types";
 
 const ROLES: ColumnRole[] = [
   "STATION_ID",
@@ -104,6 +105,8 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
   const [files, setFiles] = useState<File[]>([]);
   const [headers, setHeaders] = useState<Record<string, string[]>>({});
   const [roles, setRoles] = useState<Record<string, Record<string, ColumnRole>>>({});
+  // Optional canonical names for MEASUREMENT columns: fileKey -> column -> name.
+  const [renames, setRenames] = useState<Record<string, Record<string, string>>>({});
   const [activeTab, setActiveTab] = useState(0);
   const [headerError, setHeaderError] = useState<string | null>(null);
 
@@ -119,6 +122,7 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
       setFiles([]);
       setHeaders({});
       setRoles({});
+      setRenames({});
       setActiveTab(0);
       setHeaderError(null);
     }
@@ -169,6 +173,22 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
     setRoles((prev) => ({
       ...prev,
       [key]: { ...prev[key], [column]: role },
+    }));
+    // A rename only applies to a MEASUREMENT column; drop it if the role changes away.
+    if (role !== "MEASUREMENT") {
+      setRenames((prev) => {
+        if (!prev[key] || !(column in prev[key])) return prev;
+        const next = { ...prev[key] };
+        delete next[column];
+        return { ...prev, [key]: next };
+      });
+    }
+  };
+
+  const setRename = (key: string, column: string, name: string) => {
+    setRenames((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [column]: name },
     }));
   };
 
@@ -222,6 +242,25 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
     return mapping;
   };
 
+  // Only measurement columns whose canonical name is non-empty and differs from the header.
+  const buildRenames = (): StationMeasurementRenames | undefined => {
+    const result: StationMeasurementRenames = {};
+    for (const f of files) {
+      const key = fileKey(f);
+      const fileRoles = roles[key] ?? {};
+      const fileRenames = renames[key] ?? {};
+      const perFile: Record<string, string> = {};
+      for (const [col, name] of Object.entries(fileRenames)) {
+        const trimmed = name.trim();
+        if (fileRoles[col] === "MEASUREMENT" && trimmed && trimmed !== col) {
+          perFile[col] = trimmed;
+        }
+      }
+      if (Object.keys(perFile).length > 0) result[f.name] = perFile;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  };
+
   const handleUpdate = () => {
     if (!name || !dataset) return;
     update.mutate(
@@ -233,7 +272,13 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
   const handleSubmit = () => {
     if (!name || files.length === 0 || validationErrors.length > 0) return;
     upload.mutate(
-      { files, name, mapping: buildMapping(), description: description || undefined },
+      {
+        files,
+        name,
+        mapping: buildMapping(),
+        description: description || undefined,
+        renames: buildRenames(),
+      },
       {
         onSuccess: () => {
           onCreated?.(name);
@@ -366,11 +411,18 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
               const cols = headers[key] ?? [];
               return (
                 <Table key={key} size="small" sx={{ mt: 2 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ width: "40%" }}>Column</TableCell>
+                      <TableCell sx={{ width: "30%" }}>Type</TableCell>
+                      <TableCell>Rename measurement</TableCell>
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {cols.map((col) => (
                       <TableRow key={col}>
-                        <TableCell sx={{ width: "50%" }}>{col}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ width: "40%" }}>{col}</TableCell>
+                        <TableCell sx={{ width: "30%" }}>
                           <TextField
                             select
                             size="small"
@@ -384,6 +436,17 @@ export default function DatasetForm({ open, onClose, dataset, onCreated }: Datas
                               </MenuItem>
                             ))}
                           </TextField>
+                        </TableCell>
+                        <TableCell>
+                          {roles[key]?.[col] === "MEASUREMENT" && (
+                            <TextField
+                              size="small"
+                              fullWidth
+                              placeholder={`Default: ${col}`}
+                              value={renames[key]?.[col] ?? ""}
+                              onChange={(e) => setRename(key, col, e.target.value)}
+                            />
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

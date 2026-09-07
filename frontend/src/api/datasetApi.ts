@@ -7,6 +7,7 @@ import type {
   GeoJsonFeatureCollection,
   Measurement,
   Station,
+  StationMeasurementRenames,
   StationUploadMapping,
   UpdateDatasetRequest,
 } from "../types";
@@ -39,12 +40,16 @@ export const datasetApi = {
     name: string,
     mapping: StationUploadMapping,
     description?: string,
+    renames?: StationMeasurementRenames,
   ): Promise<Dataset> => {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
     form.append("name", name);
     form.append("mapping", JSON.stringify(mapping));
     if (description) form.append("description", description);
+    if (renames && Object.keys(renames).length > 0) {
+      form.append("renames", JSON.stringify(renames));
+    }
     const { data } = await apiClient.post<Dataset>("/datasets/upload-stations", form, {
       headers: { "Content-Type": "multipart/form-data" },
     });

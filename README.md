@@ -347,8 +347,11 @@ uploads. See [`data-analysis-service/`](data-analysis-service/).
 
 - **`POST /analyze`** (multipart `file`) → `{ "datasetType": "CSV", "columns": [...] }`
   or `{ "datasetType": "GEOJSON", "properties": [...] }`.
-- **`POST /extract-stations`** (multipart `files` + `mapping`) → parses station CSV files
-  into relational stations + long-format measurements.
+- **`POST /extract-stations`** (multipart `files` + `mapping`, optional `renames`) → parses
+  station CSV files into relational stations + long-format measurements. `renames` optionally
+  gives MEASUREMENT columns a canonical name (`{filename: {column: name}}`) so differently-named
+  columns unify into one measurement type; readings are deduplicated by
+  `(stationExternalId, timestamp, measurementType)` with last-value-wins.
 
 How the backend uses it:
 

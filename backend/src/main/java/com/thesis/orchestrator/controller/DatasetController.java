@@ -59,8 +59,9 @@ public class DatasetController {
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam("name") String name,
             @RequestParam(value = "description", required = false) String description,
-            @RequestParam("mapping") String mapping) {
-        return datasetService.uploadStations(files, name, description, mapping);
+            @RequestParam("mapping") String mapping,
+            @RequestParam(value = "renames", required = false) String renames) {
+        return datasetService.uploadStations(files, name, description, mapping, renames);
     }
 
     @GetMapping("/{id}/stations")

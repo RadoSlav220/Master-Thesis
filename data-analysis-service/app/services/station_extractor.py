@@ -132,7 +132,9 @@ def _to_float(value) -> float | None:
 
 
 def extract(
-    files: list[tuple[str, bytes]], mapping: dict[str, dict[str, str]]
+    files: list[tuple[str, bytes]],
+    mapping: dict[str, dict[str, str]],
+    renames: dict[str, dict[str, str]] | None = None,
 ) -> ExtractionResponse:
     """Extracts stations + measurements from the uploaded files.
 
@@ -143,12 +145,23 @@ def extract(
     them and be backfilled from another file). Conflicting coordinates keep the
     first-seen value (reported as a warning); a station with no coordinates in any
     file is an error. Measurements are emitted in long format.
+
+    ``renames`` optionally maps {filename -> {column -> canonical name}} for
+    MEASUREMENT columns, letting differently-named columns (e.g. ``pm25`` and
+    ``PM2.5``) be unified into one ``measurementType``. A measurement column with
+    no entry (or a blank one) keeps its original header. Measurements are
+    deduplicated by (station id, timestamp, measurement type) with **last value
+    wins**, so unifying two columns that collide on the same station+timestamp
+    keeps the later-processed reading. (This also collapses accidental exact
+    duplicate rows within a single file.)
     """
     if not files:
         raise InvalidMappingError("At least one file is required.")
 
+    renames = renames or {}
     stations: dict[str, StationRecord] = {}
-    measurements: list[MeasurementRecord] = []
+    # Keyed by (station id, timestamp, measurement type); last write wins.
+    measurements: dict[tuple[str, str | None, str], MeasurementRecord] = {}
     warnings: list[str] = []
 
     for filename, raw in files:
@@ -221,18 +234,18 @@ def extract(
                 if not pd.isna(ts_value):
                     timestamp = ts_value.isoformat()
 
+            file_renames = renames.get(filename, {})
             for col in measurement_cols:
                 value = _clean_str(row[col])
                 if value is None:
                     continue
-                measurements.append(
-                    MeasurementRecord(
-                        stationExternalId=station_id,
-                        timestamp=timestamp,
-                        measurementType=col,
-                        value=value,
-                        valueNumeric=_to_float(row[col]),
-                    )
+                mtype = _clean_str(file_renames.get(col)) or col
+                measurements[(station_id, timestamp, mtype)] = MeasurementRecord(
+                    stationExternalId=station_id,
+                    timestamp=timestamp,
+                    measurementType=mtype,
+                    value=value,
+                    valueNumeric=_to_float(row[col]),
                 )
 
     missing_coords = sorted(
@@ -249,6 +262,6 @@ def extract(
 
     return ExtractionResponse(
         stations=list(stations.values()),
-        measurements=measurements,
+        measurements=list(measurements.values()),
         warnings=warnings,
     )

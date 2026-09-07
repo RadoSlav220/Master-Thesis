@@ -75,3 +75,15 @@ def test_extract_stations_invalid_mapping_returns_400():
         data={"mapping": json.dumps(bad_mapping)},
     )
     assert resp.status_code == 400
+
+
+def test_extract_stations_endpoint_applies_renames():
+    renames = {"s.csv": {"pm25": "aqi"}}
+    resp = client.post(
+        "/extract-stations",
+        files=[("files", ("s.csv", STATION_CSV, "text/csv"))],
+        data={"mapping": json.dumps(STATION_MAPPING), "renames": json.dumps(renames)},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert {m["measurementType"] for m in body["measurements"]} == {"aqi"}
