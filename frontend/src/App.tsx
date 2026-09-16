@@ -8,7 +8,6 @@ import Datasets from "./pages/Datasets";
 import DatasetDetails from "./pages/DatasetDetails";
 import Components from "./pages/Components";
 import Executions from "./pages/Executions";
-import MapView from "./pages/MapView";
 
 const queryClient = new QueryClient();
 const theme = createTheme({ palette: { mode: "light" } });
@@ -27,7 +26,6 @@ export default function App() {
               <Route path="/datasets/:id" element={<DatasetDetails />} />
               <Route path="/components" element={<Components />} />
               <Route path="/executions" element={<Executions />} />
-              <Route path="/map" element={<MapView />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
