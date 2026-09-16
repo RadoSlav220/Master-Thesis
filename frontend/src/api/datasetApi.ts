@@ -4,7 +4,6 @@ import type {
   Dataset,
   DatasetAnalysis,
   DatasetStats,
-  GeoJsonFeatureCollection,
   Measurement,
   Station,
   StationMeasurementRenames,
@@ -67,10 +66,6 @@ export const datasetApi = {
   },
   getStats: async (id: string): Promise<DatasetStats> => {
     const { data } = await apiClient.get<DatasetStats>(`/datasets/${id}/stats`);
-    return data;
-  },
-  getGeoJson: async (id: string): Promise<GeoJsonFeatureCollection> => {
-    const { data } = await apiClient.get<GeoJsonFeatureCollection>(`/datasets/${id}/geojson`);
     return data;
   },
   download: async (id: string): Promise<{ blob: Blob; filename: string }> => {

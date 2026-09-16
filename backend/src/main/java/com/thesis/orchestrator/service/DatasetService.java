@@ -1,7 +1,6 @@
 package com.thesis.orchestrator.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.DatasetOrigin;
@@ -66,20 +65,15 @@ public class DatasetService {
     }
 
     /**
-     * Creates a dataset from an uploaded file (CSV or GeoJSON). The format is derived
-     * from the filename extension. GeoJSON gets a fast structural pre-check (must be a
-     * FeatureCollection); the raw content is stored verbatim. The upload then runs the
-     * same analyze + persist step as a fetched snapshot. Malformed content (the analysis
-     * service returns 4xx -> InvalidDataException) fails the upload and stores
-     * nothing; a transient analysis-service outage is tolerated (the dataset is still
-     * stored, with null analysis).
+     * Creates a dataset from an uploaded CSV file. The raw content is stored verbatim,
+     * then the upload runs the same analyze + persist step as a fetched snapshot.
+     * Malformed content (the analysis service returns 4xx -> InvalidDataException) fails
+     * the upload and stores nothing; a transient analysis-service outage is tolerated
+     * (the dataset is still stored, with null analysis).
      */
     public DatasetResponse upload(MultipartFile file, String name, String description) {
         String content = readFile(file);
         String type = detectType(file.getOriginalFilename());
-        if ("GEOJSON".equals(type)) {
-            validateFeatureCollection(content);
-        }
 
         Dataset dataset = Dataset.builder()
                 .name(name)
@@ -94,7 +88,7 @@ public class DatasetService {
         // Analyze before persisting so malformed content (InvalidDataException) aborts
         // the upload without leaving an orphaned dataset behind.
         try {
-            String filename = name + extensionFor(type);
+            String filename = name + ".csv";
             DatasetAnalysisResponse analysis = datasetAnalysisClient.analyze(filename, content);
             dataset.setDatasetType(analysis.datasetType());
             dataset.setAnalysisResult(objectMapper.writeValueAsString(analysis));
@@ -225,20 +219,10 @@ public class DatasetService {
         datasetRepository.delete(dataset);
     }
 
-    /** Returns the raw GeoJSON FeatureCollection stored for a dataset. */
-    public String getGeoJson(UUID id) {
-        Dataset dataset = findEntity(id);
-        String content = dataset.getContent();
-        if (content == null || content.isBlank() || !"GEOJSON".equalsIgnoreCase(dataset.getType())) {
-            throw new NotFoundException("Dataset has no GeoJSON content: " + id);
-        }
-        return content;
-    }
-
     /**
      * Sends the dataset's stored file content to the Python analysis service and
-     * returns its structural analysis. Works for any dataset with stored content
-     * (CSV or GeoJSON); the filename extension drives the service's format dispatch.
+     * returns its structural analysis. Works for any dataset with stored CSV content;
+     * the filename extension drives the service's format dispatch.
      */
     public DatasetAnalysisResponse analyze(UUID id) {
         Dataset dataset = findEntity(id);
@@ -246,14 +230,14 @@ public class DatasetService {
         if (content == null || content.isBlank()) {
             throw new InvalidUploadException("Dataset has no analyzable file content: " + id);
         }
-        String filename = dataset.getName() + extensionFor(dataset.getType());
+        String filename = dataset.getName() + ".csv";
         return datasetAnalysisClient.analyze(filename, content);
     }
 
     /**
-     * Packages a dataset for download. A content-based dataset (CSV/GeoJSON) is returned as
-     * a single file ("&lt;name&gt;.&lt;ext&gt;"). A station-based dataset (no content; data
-     * in the relational {@code stations}/{@code measurements} tables) is returned as a
+     * Packages a dataset for download. A content-based dataset (CSV) is returned as a
+     * single file ("&lt;name&gt;.csv"). A station-based dataset (no content; data in the
+     * relational {@code stations}/{@code measurements} tables) is returned as a
      * "&lt;name&gt;.zip" archive of {@code stations.csv} + {@code measurements.csv}. A
      * dataset with neither content nor stations 404s.
      */
@@ -261,10 +245,8 @@ public class DatasetService {
         Dataset dataset = findEntity(id);
         String content = dataset.getContent();
         if (content != null && !content.isBlank()) {
-            String filename = dataset.getName() + extensionFor(dataset.getType());
-            String contentType =
-                    "CSV".equalsIgnoreCase(dataset.getType()) ? "text/csv" : "application/geo+json";
-            return new DatasetDownload(content.getBytes(StandardCharsets.UTF_8), filename, contentType);
+            String filename = dataset.getName() + ".csv";
+            return new DatasetDownload(content.getBytes(StandardCharsets.UTF_8), filename, "text/csv");
         }
         if (stationRepository.countByDatasetId(id) > 0) {
             byte[] zip = stationCsvZipBuilder.build(id);
@@ -273,22 +255,14 @@ public class DatasetService {
         throw new NotFoundException("Dataset has no downloadable content: " + id);
     }
 
-    /** Maps a dataset type to a filename extension the analysis service recognizes. */
-    static String extensionFor(String type) {
-        return "CSV".equalsIgnoreCase(type) ? ".csv" : ".geojson";
-    }
-
-    /** Derives the dataset type from an uploaded filename's extension. */
+    /** Derives the dataset type from an uploaded filename's extension. CSV only. */
     private String detectType(String filename) {
         String name = filename == null ? "" : filename.toLowerCase();
         if (name.endsWith(".csv")) {
             return "CSV";
         }
-        if (name.endsWith(".geojson") || name.endsWith(".json")) {
-            return "GEOJSON";
-        }
         throw new InvalidUploadException(
-                "Unsupported file type: " + filename + ". Expected .csv, .geojson, or .json.");
+                "Unsupported file type: " + filename + ". Expected .csv.");
     }
 
     private String serializeProvenance(DatasetProvenance provenance) {
@@ -341,22 +315,6 @@ public class DatasetService {
             return new String(file.getBytes(), StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new InvalidUploadException("Could not read uploaded file: " + ex.getMessage());
-        }
-    }
-
-    private void validateFeatureCollection(String content) {
-        JsonNode root;
-        try {
-            root = objectMapper.readTree(content);
-        } catch (IOException ex) {
-            throw new InvalidUploadException("File is not valid JSON: " + ex.getMessage());
-        }
-        JsonNode type = root.get("type");
-        if (type == null || !"FeatureCollection".equals(type.asText())) {
-            throw new InvalidUploadException("GeoJSON must have type \"FeatureCollection\".");
-        }
-        if (!root.has("features") || !root.get("features").isArray()) {
-            throw new InvalidUploadException("GeoJSON FeatureCollection must contain a \"features\" array.");
         }
     }
 }

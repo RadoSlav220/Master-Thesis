@@ -29,13 +29,11 @@ import GeoJsonMap from "../map/GeoJsonMap";
 import {
   useAnalyzeDataset,
   useDataset,
-  useDatasetGeoJson,
   useDatasetMeasurements,
   useDatasetStations,
   useDatasetStats,
   useDownloadDataset,
 } from "../hooks/useDatasets";
-import { detectValueProperty, geometryTypes } from "../utils/resultParser";
 import { isDownloadable, isStationDataset } from "../utils/datasetHelpers";
 import type { GeoJsonFeature, GeoJsonFeatureCollection } from "../types";
 
@@ -46,14 +44,8 @@ export default function DatasetDetails() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const dataset = useDataset(id);
-  const geo = useDatasetGeoJson(dataset.data?.hasGeoJson ? id : null);
   const analyze = useAnalyzeDataset();
   const download = useDownloadDataset();
-
-  const fc = geo.data ?? null;
-  const types = useMemo(() => geometryTypes(fc), [fc]);
-  const valueProperty = useMemo(() => detectValueProperty(fc), [fc]);
-  const featureCount = fc?.features.length ?? 0;
 
   // Prefer freshly re-run analysis; otherwise fall back to the persisted result.
   const persistedAnalysis = useMemo(() => {
@@ -106,8 +98,7 @@ export default function DatasetDetails() {
 
   const plottableStationCount = stationFeatureCollection?.features.length ?? 0;
 
-  const canAnalyze =
-    !isStation && (!!dataset.data?.hasGeoJson || dataset.data?.type === "CSV");
+  const canAnalyze = !isStation && dataset.data?.type === "CSV";
   const canDownload = dataset.data ? isDownloadable(dataset.data) : false;
 
   const provenance = dataset.data?.provenance ?? null;
@@ -181,33 +172,8 @@ export default function DatasetDetails() {
                   </Table>
                 </Box>
               )}
-
-              <Typography variant="subtitle1">Features: {geo.isLoading ? "…" : featureCount}</Typography>
-              <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                Geometry Types:
-              </Typography>
-              {types.length > 0 ? (
-                <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: "wrap" }}>
-                  {types.map((t) => (
-                    <Chip key={t} label={t} size="small" variant="outlined" />
-                  ))}
-                </Stack>
-              ) : (
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  {dataset.data.hasGeoJson ? "—" : "No geometry (non-GeoJSON dataset)."}
-                </Typography>
-              )}
             </CardContent>
           </Card>
-
-          {dataset.data.hasGeoJson && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Geometry Preview
-              </Typography>
-              {geo.isLoading ? <CircularProgress /> : <GeoJsonMap data={fc} valueProperty={valueProperty} />}
-            </Box>
-          )}
 
           {canAnalyze && (
             <Card>

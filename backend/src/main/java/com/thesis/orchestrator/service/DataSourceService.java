@@ -138,7 +138,7 @@ public class DataSourceService {
         // Analyze before persisting so malformed content (InvalidDataException) aborts
         // the fetch without leaving an orphaned snapshot behind.
         try {
-            String filename = request.name() + DatasetService.extensionFor(format);
+            String filename = request.name() + ".csv";
             DatasetAnalysisResponse analysis = datasetAnalysisClient.analyze(filename, content);
             dataset.setDatasetType(analysis.datasetType());
             dataset.setAnalysisResult(objectMapper.writeValueAsString(analysis));

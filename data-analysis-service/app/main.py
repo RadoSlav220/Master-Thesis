@@ -31,7 +31,7 @@ async def analyze(file: UploadFile = File(...)) -> AnalysisResponse:
     except UnsupportedFileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
-        # Malformed CSV / GeoJSON.
+        # Malformed CSV.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

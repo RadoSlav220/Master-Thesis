@@ -28,7 +28,7 @@ const TYPES: { value: DataSourceType; label: string }[] = [
   { value: "API", label: "API" },
 ];
 
-const OUTPUT_FORMATS: DataSourceOutputFormat[] = ["CSV", "GEOJSON"];
+const OUTPUT_FORMATS: DataSourceOutputFormat[] = ["CSV"];
 
 interface DataSourceFormProps {
   open: boolean;
@@ -39,7 +39,7 @@ interface DataSourceFormProps {
 export default function DataSourceForm({ open, onClose, dataSource }: DataSourceFormProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<DataSourceType>("API");
-  const [outputFormat, setOutputFormat] = useState<DataSourceOutputFormat>("GEOJSON");
+  const [outputFormat, setOutputFormat] = useState<DataSourceOutputFormat>("CSV");
   const [endpointUrl, setEndpointUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [description, setDescription] = useState("");
@@ -55,7 +55,7 @@ export default function DataSourceForm({ open, onClose, dataSource }: DataSource
     if (open) {
       setName(dataSource?.name ?? "");
       setType((dataSource?.type as DataSourceType) ?? "API");
-      setOutputFormat((dataSource?.outputFormat as DataSourceOutputFormat) ?? "GEOJSON");
+      setOutputFormat((dataSource?.outputFormat as DataSourceOutputFormat) ?? "CSV");
       setEndpointUrl(dataSource?.endpointUrl ?? "");
       setApiKey(dataSource?.apiKey ?? "");
       setDescription(dataSource?.description ?? "");

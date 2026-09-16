@@ -1,6 +1,6 @@
 export type ExecutionStatus = "CREATED" | "RUNNING" | "COMPLETED" | "FAILED";
 
-export type DatasetType = "CSV" | "GEOJSON";
+export type DatasetType = "CSV";
 
 export type DatasetOrigin = "UPLOAD" | "API" | "DATABASE";
 
@@ -15,7 +15,6 @@ export interface Dataset {
   name: string;
   type: string;
   description: string | null;
-  hasGeoJson: boolean;
   hasContent: boolean;
   datasetType: string | null;
   analysisResult: string | null;
@@ -121,7 +120,7 @@ export interface DatasetAnalysis {
 
 export type DataSourceType = "API";
 
-export type DataSourceOutputFormat = "CSV" | "GEOJSON";
+export type DataSourceOutputFormat = "CSV";
 
 export interface QueryParameter {
   name: string;
