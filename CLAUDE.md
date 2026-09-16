@@ -101,9 +101,14 @@ scope note below.
   constraint on their column. In early dev, the local Postgres volume (`pgdata`) can just
   be pruned to shed accumulated schema drift. Flyway/migrations are the **lowest-priority**
   backlog item — do not design around them or treat them as a prerequisite.
-- **DataSource model (parked path — kept, not deleted)** — the "register a source → fetch a
-  snapshot over HTTP" mechanism is **deprioritized in favor of manual CSV upload** (mentor
-  meeting 2026-08-22) but retained. `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
+- **DataSource / API-fetch model (parked — and now likely to be REMOVED)** — the "register a
+  source → fetch a snapshot over HTTP" mechanism is **deprioritized in favor of manual CSV upload**
+  (mentor meeting 2026-08-22). **Update (2026-09-07): the maintainer expects the entire API-fetch
+  path to be out of scope for the thesis MVP and will probably delete all of its logic.** Do NOT
+  build new work on top of it, and do NOT anchor the DATABASE-source design on it (see the DATABASE
+  bullet below — that design deliberately reuses the station-upload pipeline instead). The
+  description below records how the API path works today, for reference until it is removed.
+  `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
   reserved for later) + an `outputFormat` of `CSV` or `GEOJSON`. At registration a source
   also declares the **query parameters** its API expects (name, `required` flag, optional
   `defaultValue`). These definitions are stored **relationally** as a
@@ -123,6 +128,39 @@ scope note below.
   `endDate`/`end`/`to`) when present, else falls back to a default last-24h window.
   (The earlier typed `Instant` window + MUI `DateTimePicker` approach was replaced by
   this generic query-parameter model.)
+- **DATABASE data-source fetch — design direction (planned; epic #37, parked; UNRESOLVED — needs
+  supervisor input)** — a relational DB source produces **rows in tables**, which *when flat* is the
+  same shape the station-CSV upload consumes (tabular rows + a column-role mapping). Tentative
+  direction (2026-09-07): converge on the existing station-extraction pipeline ("a DB fetch is an
+  upload where the platform generates the rows"); **do NOT build on the API-fetch mechanism above**
+  (slated for deletion); the user **picks a table + columns** and the platform **builds a bounded,
+  parameterized `SELECT`** (**NOT** free-form user-typed SQL — arbitrary SQL against a
+  stored-credential connection is a security liability, especially with no auth yet); selected
+  columns feed the **same role-mapping step** as CSV upload
+  (`STATION_ID`/`LATITUDE`/`LONGITUDE`/`TIMESTAMP`/`STATION_ATTRIBUTE`/`MEASUREMENT`/`IGNORE`); rows
+  → relational `stations`/`measurements` via the existing extraction path (ideally generate an
+  in-memory CSV and reuse `/extract-stations`, one extraction implementation).
+  **KNOWN PROBLEM with this approach (2026-09-07):** the station pipeline joins **only on
+  `stationId`** and assumes a **denormalized/flat** input where every table/file carries `stationId`.
+  Real DB schemas are **normalized**, and station linkage may be **transitive across an FK chain**,
+  not a direct column. Counterexample: `stations`, `measurements_metadata`, `measurements_values`
+  where `measurements_values` keys off `measurement_id` → `measurements_metadata` → `station_id`.
+  "Pick table + columns, join by stationId" **cannot express that** — there is no `stationId` in
+  `measurements_values` to map. **Note the CSV path has the *same* limitation** — it also only
+  joins on `stationId` and assumes flat input — but it **externalizes the flattening**: a human
+  produced the CSV (ran the export/join) *before* upload, so the platform never sees the normalized
+  schema. A DB fetch reaches into the **live normalized schema**, so the flattening becomes the
+  **platform's** job at fetch time. That leaves two real options: **(1) push flattening back onto the
+  user** — require them to supply a query/view returning flat `stationId`-bearing rows (i.e. the CSV
+  posture expressed as SQL/a view — which reopens the raw-SQL security question); or **(2) build
+  join-specification machinery** in the platform (a guided join-builder) — a genuinely bigger feature,
+  justified only if the real schemas demand it. Which option is right **depends on the shape of the
+  actual databases, which is unknown** → to be settled with the supervisor. Bring these questions:
+  how normalized are the target DBs? is station linkage always a direct column or transitive via FKs?
+  do all relevant tables even have a station key? Other still-open items (defer): real JDBC vs. a
+  mocked demonstrator (mock-first favored); where mapping is authored (interactive-at-fetch reusing
+  `DatasetForm`'s mapping UI vs. stored on the source); config as a `DatabaseConfig` variant of the
+  anticipated `DataSourceConfig` sealed hierarchy.
 - **Measurement mapping** — each predefined component declares a set of **expected measurements**
   (`Component.expectedMeasurements`, seeded in the `demo` profile). When running a component against a
   **station-based** dataset, the user maps the dataset's measurement columns onto the component's
