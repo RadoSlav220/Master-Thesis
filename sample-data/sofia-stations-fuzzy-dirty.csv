@@ -1,0 +1,29 @@
+station,name,neighborhood,operator,timestamp,pm25,pm10,no2
+SOF-01,Sensor Center,Center,Sofia Municipality,2026-01-15T08:00:00Z,42.5,68.1,31.2
+SOF-01,sensor center,Centre,Sofia Municipality,2026-01-15T09:00:00Z,48.3,74.6,35.8
+SOF-01,Sensor  Center,Tsentar,Sofia Municipality,2026-01-15T10:00:00Z,45.1,70.2,33.0
+SOF-01,Senzor Center,Center ,Sofia Municipallity,2026-01-15T11:00:00Z,44.0,69.0,32.1
+SOF-02,Sensor Lozenets,Lozenets,Sofia Municipality,2026-01-15T08:00:00Z,29.7,51.4,22.5
+SOF-02,Sensor Lozenetz,Lozenec,Sofia Municipality,2026-01-15T09:00:00Z,33.1,55.9,25.0
+SOF-02,Sensor Lozenets,Lozentes,Sofia Muncipality,2026-01-15T10:00:00Z,31.4,53.2,23.8
+SOF-02,sensor  lozenets,LOZENETS,Sofia Municipality ,2026-01-15T11:00:00Z,30.2,52.0,22.9
+SOF-03,Sensor Mladost,Mladost,Sofia Municipality,2026-01-15T08:00:00Z,55.2,88.3,40.1
+SOF-03,Sensor Mladost 1,Mladost,Sofia Municipallity,2026-01-15T09:00:00Z,61.0,95.7,44.6
+SOF-03,Senzor Mladost,mladost,Sofia Municipality,2026-01-15T10:00:00Z,58.3,91.5,42.0
+SOF-03,Sensor Mladost.,Mladosht,Sofia Munic.,2026-01-15T11:00:00Z,57.1,90.0,41.3
+SOF-04,Sensor Nadezhda,Nadezhda,Environmental Agency,2026-01-15T08:00:00Z,38.9,62.0,28.7
+SOF-04,Sensor Nadejda,Nadejda,Environmental Agency,2026-01-15T09:00:00Z,41.6,66.8,30.9
+SOF-04,Sensor Nadezda,Nadezhda,Enviromental Agency,2026-01-15T10:00:00Z,40.1,64.2,29.8
+SOF-04,sensor nadezhda,NADEZHDA,Environmental Agency,2026-01-15T11:00:00Z,39.5,63.0,29.1
+SOF-05,Sensor Studentski,Studentski Grad,Environmental Agency,2026-01-15T08:00:00Z,26.4,44.7,19.8
+SOF-05,Sensor Studentski Grad,Studentski grad,Environmental Agency,2026-01-15T09:00:00Z,28.0,47.1,21.0
+SOF-05,Senzor Studentski,Student City,Env. Agency,2026-01-15T10:00:00Z,27.2,45.9,20.4
+SOF-05,Sensor Studenski,Studentski Grad ,Environmental Agency,2026-01-15T11:00:00Z,26.9,45.3,20.1
+SOF-06,Sensor Vitosha,Vitosha,Sofia Municipality,2026-01-15T08:00:00Z,18.2,30.5,14.3
+SOF-06,Sensor Vitosha Blvd,Vitosha Blvd.,Sofia Municipality,2026-01-15T09:00:00Z,19.5,32.8,15.1
+SOF-06,Sensor Vitoshka,Vitosha Boulevard,Sofia Municipality,2026-01-15T10:00:00Z,18.9,31.6,14.7
+SOF-06,sensor  vitosha,vitosha,Sofia Municipality,2026-01-15T11:00:00Z,18.5,31.0,14.5
+SOF-07,Sensor Druzhba,Druzhba,Environmental Agency,2026-01-15T08:00:00Z,47.8,76.2,34.9
+SOF-07,Sensor Druzba,Druzba,Environmental Agency,2026-01-15T09:00:00Z,50.3,80.1,37.2
+SOF-07,Sensor Drujba,Drujba,Env Agency,2026-01-15T10:00:00Z,48.9,78.0,36.0
+SOF-07,Senzor Druzhba,DRUZHBA,Environmental Agency,2026-01-15T11:00:00Z,48.1,76.8,35.3
