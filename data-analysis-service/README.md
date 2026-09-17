@@ -1,10 +1,10 @@
 # Dataset Analysis Service
 
 A standalone Python (FastAPI) microservice — the first data-processing component of
-the Local Digital Twin platform. It inspects an uploaded dataset file and returns its
-**structure**: column names for CSV, or the union of feature property keys for
-GeoJSON. It performs no filtering, transformation, or model execution — that is
-foundation for future work.
+the Local Digital Twin platform. It inspects an uploaded **CSV** dataset file and
+returns its **structure** (its column names), and extracts stations + measurements
+from station-CSV uploads. It performs no filtering, transformation, or model
+execution — that is foundation for future work.
 
 Orchestration stays in the Spring Boot backend, which forwards dataset files here.
 
@@ -20,8 +20,9 @@ Orchestration stays in the Spring Boot backend, which forwards dataset files her
 ```
 data-analysis-service/
   app/
-    main.py                       # FastAPI app: POST /analyze, GET /health
-    services/dataset_analyzer.py  # CSV (pandas) + GeoJSON analysis
+    main.py                       # FastAPI app: POST /analyze, POST /extract-stations, GET /health
+    services/dataset_analyzer.py  # CSV structure analysis (pandas)
+    services/station_extractor.py # station-CSV -> relational stations + measurements
     models/analysis_response.py   # Pydantic response model
   requirements.txt
   Dockerfile
@@ -40,7 +41,7 @@ uvicorn app.main:app --reload --port 8000
 
 ### `POST /analyze`
 
-`multipart/form-data` with a single `file` field.
+`multipart/form-data` with a single `file` field (CSV only).
 
 **CSV** → 
 
@@ -48,14 +49,13 @@ uvicorn app.main:app --reload --port 8000
 { "datasetType": "CSV", "columns": ["timestamp", "temperature", "humidity"] }
 ```
 
-**GeoJSON** (a `FeatureCollection`) → 
+Returns **400 Bad Request** for an unsupported file type or malformed CSV.
 
-```json
-{ "datasetType": "GEOJSON", "properties": ["pm25", "temperature"] }
-```
+### `POST /extract-stations`
 
-Returns **400 Bad Request** for an unsupported file type, malformed CSV, or malformed
-GeoJSON.
+`multipart/form-data` with `files` (one or more station CSVs) + a `mapping` JSON
+(per-file column→role), and an optional `renames` JSON. Parses the CSVs into
+relational stations + long-format measurements.
 
 ### `GET /health`
 
@@ -66,10 +66,7 @@ GeoJSON.
 ## Examples
 
 ```bash
-# GeoJSON
-curl -F "file=@../sample-data/sofia-air-quality.geojson" http://localhost:8000/analyze
-
-# CSV
+# CSV structure analysis
 printf 'timestamp,temperature,humidity\n1,20,50\n' > /tmp/sample.csv
 curl -F "file=@/tmp/sample.csv" http://localhost:8000/analyze
 ```
