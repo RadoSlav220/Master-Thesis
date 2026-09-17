@@ -122,17 +122,14 @@ public class DataSourceFetcher {
             log.debug("Mock-fetching from source {} with query parameters {}", source.getId(), queryParameters);
         }
         String metric = metricFor(source);
-        if ("CSV".equalsIgnoreCase(source.getOutputFormat())) {
-            Instant end = parseInstant(queryParameters, END_KEYS).orElse(Instant.now());
-            Instant start = parseInstant(queryParameters, START_KEYS)
-                    .orElse(end.minus(DEFAULT_WINDOW_HOURS, ChronoUnit.HOURS));
-            // Guard against an inverted window from arbitrary user-supplied values.
-            if (start.isAfter(end)) {
-                start = end.minus(DEFAULT_WINDOW_HOURS, ChronoUnit.HOURS);
-            }
-            return generateCsv(metric, start, end);
+        Instant end = parseInstant(queryParameters, END_KEYS).orElse(Instant.now());
+        Instant start = parseInstant(queryParameters, START_KEYS)
+                .orElse(end.minus(DEFAULT_WINDOW_HOURS, ChronoUnit.HOURS));
+        // Guard against an inverted window from arbitrary user-supplied values.
+        if (start.isAfter(end)) {
+            start = end.minus(DEFAULT_WINDOW_HOURS, ChronoUnit.HOURS);
         }
-        return generateGeoJson(metric);
+        return generateCsv(metric, start, end);
     }
 
     /** Reads the first present key from {@code keys} and parses it as an ISO-8601 instant. */
@@ -182,21 +179,6 @@ public class DataSourceFetcher {
                     .append("\n");
         }
         return sb.toString();
-    }
-
-    private String generateGeoJson(String metric) {
-        StringBuilder features = new StringBuilder();
-        for (int i = 0; i < SOFIA_POINTS.length; i++) {
-            double[] coord = SOFIA_POINTS[i];
-            if (i > 0) {
-                features.append(",");
-            }
-            features.append("""
-                    {"type":"Feature","properties":{"%s":%s},\
-                    "geometry":{"type":"Point","coordinates":[%s,%s]}}\
-                    """.formatted(metric, value(metric), coord[0], coord[1]));
-        }
-        return "{\"type\":\"FeatureCollection\",\"features\":[" + features + "]}";
     }
 
     private String value(String metric) {

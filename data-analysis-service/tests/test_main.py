@@ -6,17 +6,7 @@ from app.main import app
 
 client = TestClient(app)
 
-GEOJSON = json.dumps(
-    {
-        "type": "FeatureCollection",
-        "features": [
-            {"type": "Feature", "properties": {"pm25": 33, "name": "A"},
-             "geometry": {"type": "Point", "coordinates": [23.32, 42.69]}},
-            {"type": "Feature", "properties": {"pm25": 21, "name": "B"},
-             "geometry": {"type": "Point", "coordinates": [23.33, 42.70]}},
-        ],
-    }
-).encode()
+CSV = b"timestamp,temperature,humidity\n1,20,50\n2,21,55\n"
 
 
 def test_health():
@@ -25,12 +15,12 @@ def test_health():
     assert resp.json() == {"status": "UP"}
 
 
-def test_analyze_geojson_endpoint():
-    resp = client.post("/analyze", files={"file": ("d.geojson", GEOJSON, "application/json")})
+def test_analyze_csv_endpoint():
+    resp = client.post("/analyze", files={"file": ("d.csv", CSV, "text/csv")})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["datasetType"] == "GEOJSON"
-    assert body["properties"] == ["pm25", "name"]
+    assert body["datasetType"] == "CSV"
+    assert body["columns"] == ["timestamp", "temperature", "humidity"]
 
 
 def test_analyze_bad_file_returns_400():

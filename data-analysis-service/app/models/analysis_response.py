@@ -6,8 +6,7 @@ from pydantic import BaseModel
 class AnalysisResponse(BaseModel):
     """Structure analysis of an uploaded dataset.
 
-    For CSV datasets ``columns`` is populated; for GeoJSON datasets
-    ``properties`` (the union of feature property keys) is populated.
+    For CSV datasets ``columns`` is populated.
     """
 
     datasetType: str

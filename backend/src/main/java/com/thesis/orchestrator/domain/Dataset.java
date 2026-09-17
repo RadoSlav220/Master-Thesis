@@ -38,7 +38,7 @@ public class Dataset {
     @Column(columnDefinition = "text")
     private String description;
 
-    /** Raw dataset content — CSV text or a GeoJSON FeatureCollection. */
+    /** Raw dataset content — CSV text. */
     @Column(columnDefinition = "text")
     private String content;
 
@@ -46,7 +46,7 @@ public class Dataset {
     @Column(columnDefinition = "text")
     private String analysisResult;
 
-    /** Dataset type as reported by analysis, e.g. CSV or GEOJSON. */
+    /** Dataset type as reported by analysis, e.g. CSV. */
     @Column
     private String datasetType;
 

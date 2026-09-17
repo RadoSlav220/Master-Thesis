@@ -21,14 +21,6 @@ export function useDataset(id: string | null) {
   });
 }
 
-export function useDatasetGeoJson(id: string | null) {
-  return useQuery({
-    queryKey: [...KEY, id, "geojson"],
-    queryFn: () => datasetApi.getGeoJson(id as string),
-    enabled: !!id,
-  });
-}
-
 export function useCreateDataset() {
   const qc = useQueryClient();
   return useMutation({

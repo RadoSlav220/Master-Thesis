@@ -15,7 +15,6 @@ public record DatasetResponse(
         String name,
         String type,
         String description,
-        boolean hasGeoJson,
         boolean hasContent,
         String datasetType,
         String analysisResult,
@@ -29,13 +28,11 @@ public record DatasetResponse(
     public static DatasetResponse from(Dataset dataset) {
         String content = dataset.getContent();
         boolean hasContent = content != null && !content.isBlank();
-        boolean isGeoJson = hasContent && "GEOJSON".equalsIgnoreCase(dataset.getType());
         return new DatasetResponse(
                 dataset.getId(),
                 dataset.getName(),
                 dataset.getType(),
                 dataset.getDescription(),
-                isGeoJson,
                 hasContent,
                 dataset.getDatasetType(),
                 dataset.getAnalysisResult(),

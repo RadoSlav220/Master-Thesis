@@ -91,11 +91,6 @@ public class DatasetController {
         return datasetService.getById(id);
     }
 
-    @GetMapping(value = "/{id}/geojson", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> getGeoJson(@PathVariable UUID id) {
-        return ResponseEntity.ok(datasetService.getGeoJson(id));
-    }
-
     @GetMapping("/{id}/download")
     public ResponseEntity<byte[]> download(@PathVariable UUID id) {
         DatasetDownload download = datasetService.download(id);
