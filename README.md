@@ -2,61 +2,62 @@
 
 A prototype **Local Digital Twin** orchestration platform. It manages geospatial
 datasets, registers external analytical **components** (ML / analytical services
-exposed over REST), executes them against datasets, and visualizes the returned
-geospatial results on an interactive map.
+exposed over REST), executes them against datasets, and surfaces the returned
+results.
 
 ## Project overview
 
 A **Digital Twin** is a live digital representation of a physical system — here, a
 city. This platform is the **orchestration layer** of such a twin: it does *not*
 perform analysis itself. Instead it coordinates heterogeneous external analytical
-components through a common execution mechanism and persists their results for
-visualization.
+components through a common execution mechanism and persists their results.
 
 - **Component orchestration** — analytical models live behind REST endpoints. The
-  platform registers them, sends a dataset (and its GeoJSON geometry) to the
-  component, stores the result, and surfaces it. Swapping or adding a model needs no
-  platform change — only a new registered endpoint.
-- **Geospatial focus** — datasets and results are GeoJSON, rendered on MapLibre, so
-  city-scale analytical output (air quality, traffic, …) is immediately visual.
+  platform registers them, sends a dataset to the component, stores the result, and
+  surfaces it. Swapping or adding a model needs no platform change — only a new
+  registered endpoint.
+- **Geospatial data** — datasets are station + measurement data ingested from CSV;
+  the internal per-station representation and component I/O use GeoJSON, so city-scale
+  analytical output (air quality, traffic, …) is geometry-aware. *(A dedicated result
+  map view is deferred — see below.)*
 
 ### Thesis context
 
 This repository is the practical artifact of a master's thesis. It demonstrates that
 a platform can integrate geospatial datasets, invoke external analytical services
-through a uniform interface, and visualize city-related results — the core capability
+through a uniform interface, and surface city-related results — the core capability
 of a Local Digital Twin. This step focuses on **reproducibility and demonstration
 readiness**: the whole system runs with a single command.
 
 ## Architecture
 
 ```
-        React Frontend (MapLibre + MUI)
+              React Frontend (MUI)
                   |  REST (/api → proxied)
                   v
          Spring Boot Backend (orchestration)  ───────►  Python Dataset
                   |                                      Analysis Service
-                  |  1. fetch snapshot from a Data       (FastAPI + Pandas)
-                  |     Source (mock external API)        - /analyze (structure)
-                  |  2. auto-analyze + persist            - /extract-stations
-                  v
+                  |  1. upload station CSV(s)            (FastAPI + Pandas)
+                  |  2. auto-analyze + persist            - /analyze (structure)
+                  v                                       - /extract-stations
        External Analytical Components (mock)
                   |  GeoJSON FeatureCollection
                   v
           Execution Results (PostgreSQL)
-                  |
-                  v
-          MapLibre Visualization
 ```
 
-The pipeline: register a **Data Source** → **fetch** a dataset snapshot for a time
-period → the backend **auto-analyzes** it (via the Python service) and **persists** the
-result → **map** the dataset's measurements to an analytical **component**'s expected
-measurements → run the component → visualize the GeoJSON result on the map.
+The pipeline: **upload** station + measurement CSV files (assigning each column a role)
+→ the backend **extracts + persists** stations/measurements (via the Python service) →
+**map** the dataset's measurements to an analytical **component**'s expected
+measurements → run the component → inspect the stored result.
+
+Result **visualization** is deferred: an interactive result map was removed (the model
+output shape — forecasts in time and/or space — is still being decided) and results are
+shown as raw JSON for now.
 
 The frontend talks only to the backend REST API. The backend orchestrates external
-components, delegates data-processing (structure analysis) to the Python
-service, and persists data sources / datasets / executions in PostgreSQL. Analytical
+components, delegates data-processing (structure analysis, station extraction) to the
+Python service, and persists datasets / executions in PostgreSQL. Analytical
 logic stays in the (currently mock) external components and the specialized Python
 service.
 
@@ -73,7 +74,7 @@ service.
 ├── data-analysis-service/   Python FastAPI dataset-analysis microservice
 │   ├── Dockerfile
 │   └── app/
-├── sample-data/      Example GeoJSON datasets for the demo
+├── sample-data/      Example Sofia station CSVs for the demo
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
@@ -111,22 +112,20 @@ Configuration is via environment variables (see `.env.example`):
 ## Demo scenario
 
 With the stack running (the two mock analytical components are auto-registered), open
-http://localhost:3000 and either **fetch** a dataset from a data source or **upload**
-one:
+http://localhost:3000 and **upload** a station dataset:
 
-1. **Register a Data Source** — Data Sources → *Register Data Source* → type `API`,
-   output format `GEOJSON` (or `CSV`).
-2. **Fetch a dataset** — on that source, click *Fetch*, give it a name and a date range.
-   The backend generates a snapshot, **auto-analyzes** it, and stores the analysis. The
-   new dataset appears under Datasets. *(Alternatively: Datasets → Create Dataset →
-   `GEOJSON` → upload a file from [`sample-data/`](sample-data/).)*
-3. **Inspect the dataset** — open its details to see metadata, the persisted analysis
-   (columns/properties), geometry types, and a map preview.
-4. **Execute a component** — Executions → pick the dataset + a component (Air Quality /
+1. **Create a dataset** — Datasets → *Create Dataset* → upload one or more station CSV
+   files from [`sample-data/`](sample-data/) (e.g. `sofia-stations-air-quality.csv`).
+   Assign each column a **role** (`STATION_ID` / `LATITUDE` / `LONGITUDE` / `TIMESTAMP` /
+   `STATION_ATTRIBUTE` / `MEASUREMENT` / `IGNORE`); optionally give MEASUREMENT columns a
+   canonical name. The backend extracts stations + measurements and persists them.
+2. **Inspect the dataset** — open its details to see metadata, the station-location map,
+   and the stations / measurements tables.
+3. **Execute a component** — Executions → pick the dataset + a component (Air Quality /
    Traffic) → map the dataset's measurements to the component's expected measurements →
    *Execute*.
-5. **Visualize results** — Map → *Result* mode → select the execution to see the
-   returned GeoJSON features colored by value, plus a chart.
+4. **Inspect the result** — open the execution to see the returned GeoJSON
+   `FeatureCollection` (shown as JSON; a dedicated result view is deferred).
 
 ## Health & info endpoints
 
@@ -196,24 +195,22 @@ Additional endpoints:
 
 | Method / path                    | Purpose                                                    |
 |----------------------------------|------------------------------------------------------------|
-| `POST /data-sources/{id}/fetch`  | Fetch a dataset snapshot for a period; auto-analyze + store |
-| `POST /datasets/upload`          | Multipart upload of a GeoJSON file                          |
-| `GET /datasets/{id}/geojson`     | The stored GeoJSON FeatureCollection                        |
-| `GET /datasets/{id}/download`    | Download the dataset as a file: content-based datasets as a single CSV/GeoJSON; station-based datasets as a `.zip` of `stations.csv` + `measurements.csv` (round-trippable via Create Dataset) |
+| `POST /datasets/upload-stations` | Multipart upload of one or more station CSVs + a column-role mapping; extracts stations/measurements |
+| `POST /datasets/upload`          | Multipart upload of a single CSV file                      |
+| `GET /datasets/{id}/stations`    | Stations extracted for a station-based dataset             |
+| `GET /datasets/{id}/measurements`| A dataset's measurements (long format, capped by `limit`)  |
+| `GET /datasets/{id}/download`    | Download the dataset as a file: content-based datasets as a single CSV; station-based datasets as a `.zip` of `stations.csv` + `measurements.csv` (round-trippable via Create Dataset) |
 | `POST /datasets/{id}/analyze`    | (Re-)run structure analysis via the Python service          |
+| `POST /data-sources/{id}/fetch`  | Fetch a dataset snapshot (parked API-fetch path; mocked)   |
 
 ### Example
 
 ```bash
-# Register a data source
-curl -X POST http://localhost:8080/data-sources \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Sofia AQ API","type":"API","outputFormat":"GEOJSON"}'
-
-# Fetch a dataset snapshot from it (auto-analyzed + stored)
-curl -X POST http://localhost:8080/data-sources/<source-id>/fetch \
-  -H "Content-Type: application/json" \
-  -d '{"name":"AQ Snapshot","startDate":"2026-07-01","endDate":"2026-07-05"}'
+# Upload a station dataset (CSV + a per-file column-role mapping)
+curl -X POST http://localhost:8080/datasets/upload-stations \
+  -F "files=@sample-data/sofia-stations-air-quality.csv" \
+  -F "name=Sofia Air Quality" \
+  -F 'mapping={"sofia-stations-air-quality.csv":{"station":"STATION_ID","lat":"LATITUDE","lon":"LONGITUDE","ts":"TIMESTAMP","pm25":"MEASUREMENT"}}'
 
 # Trigger an execution, mapping the dataset's measurements to the component's expected ones
 curl -X POST http://localhost:8080/executions \
@@ -274,71 +271,17 @@ curl http://localhost:8080/executions/<execution-id>
 
 Swap the `endpointUrl` for `.../mock-components/traffic` to run the Traffic component.
 
-## Geospatial datasets (GeoJSON)
+## Data sources & fetching (parked)
 
-Datasets can carry a GeoJSON `FeatureCollection`. The backend stores the raw
-content (as text — no PostGIS) and passes it to components at execution time, so
-analytical results come back as GeoJSON ready to render on a map.
-
-### Endpoints
-
-| Method / path                 | Purpose                                             |
-|-------------------------------|-----------------------------------------------------|
-| `POST /datasets/upload`       | Multipart upload of a `.geojson` file               |
-| `GET /datasets/{id}/geojson`  | Returns the stored `FeatureCollection`              |
-
-`POST /datasets/upload` is `multipart/form-data` with parts: `file` (the GeoJSON),
-`name`, and optional `description`. The backend validates that the file is a
-`FeatureCollection` with a `features` array (basic structural check) and returns
-`400` otherwise. Uploaded datasets get `type = GEOJSON` and `hasGeoJson = true`.
-
-At execution time the component receives:
-
-```json
-{ "datasetId": "...", "geoJson": { "type": "FeatureCollection", "features": [ ... ] } }
-```
-
-### Sample data
-
-Small example FeatureCollections live in [`sample-data/`](sample-data/):
-
-- `sofia-air-quality.geojson` — 5 sensor Points
-- `sofia-traffic.geojson` — LineStrings + a Polygon
-
-### Example
-
-```bash
-# Upload a GeoJSON dataset
-curl -X POST http://localhost:8080/datasets/upload \
-  -F "file=@sample-data/sofia-air-quality.geojson" \
-  -F "name=Sofia Air Quality"
-
-# Fetch its geometry back
-curl http://localhost:8080/datasets/<dataset-id>/geojson
-
-# Execute the air-quality component -> result is a FeatureCollection with pm25 per feature
-curl -X POST http://localhost:8080/executions \
-  -H "Content-Type: application/json" \
-  -d '{"datasetId":"<dataset-id>","componentId":"<component-id>"}'
-```
-
-## Data sources & fetching
-
-Rather than only uploading files, datasets can be **fetched** from a registered
-**Data Source**. A data source records an external feed (`type` = `API`; a `DATABASE`
-type is reserved for later) and its `outputFormat` (`CSV` or `GEOJSON`).
-
-Fetching a snapshot for a date range:
-
-1. `POST /data-sources/{id}/fetch` with `{ name, startDate, endDate }`.
-2. The backend generates a mock snapshot in the source's format (external fetch is
-   mocked for now — no real network call), stores it as a new dataset, then **runs
-   structure analysis once and persists the result** on the dataset.
+An earlier ingestion path let datasets be **fetched** from a registered **Data
+Source** (an external `API` feed) instead of uploaded. This path is **parked** in
+favor of manual CSV upload (it is kept in the codebase but not the focus, and may be
+removed): `POST /data-sources/{id}/fetch` generates a **mock CSV** snapshot (no real
+network call), stores it as a dataset, and runs structure analysis once.
 
 Because a fetched snapshot is immutable, caching its analysis is safe — the dataset
 records its `datasetType`, its `analysisResult`, and the `sourceId` it came from
-(provenance). The Dataset Details page shows the persisted analysis without re-calling
-the Python service.
+(provenance).
 
 ## Dataset analysis service
 
@@ -346,8 +289,7 @@ A standalone **Python (FastAPI)** microservice handles data-processing so the ba
 stays a pure orchestrator. It inspects dataset structure and extracts stations from CSV
 uploads. See [`data-analysis-service/`](data-analysis-service/).
 
-- **`POST /analyze`** (multipart `file`) → `{ "datasetType": "CSV", "columns": [...] }`
-  or `{ "datasetType": "GEOJSON", "properties": [...] }`.
+- **`POST /analyze`** (multipart `file`, CSV) → `{ "datasetType": "CSV", "columns": [...] }`.
 - **`POST /extract-stations`** (multipart `files` + `mapping`, optional `renames`) → parses
   station CSV files into relational stations + long-format measurements. `renames` optionally
   gives MEASUREMENT columns a canonical name (`{filename: {column: name}}`) so differently-named
@@ -398,27 +340,23 @@ npm run build        # type-check + production build into frontend/dist
 | Page            | Purpose                                                              |
 |-----------------|---------------------------------------------------------------------|
 | Dashboard       | Counts of datasets, components, executions                          |
-| Data Sources    | Register external sources; **Fetch** a dataset for a date range     |
-| Datasets        | List datasets; upload a GeoJSON file or create a plain dataset      |
-| Dataset Details | Metadata, persisted analysis, feature count, geometry types, map preview |
+| Data Sources    | Register external sources; **Fetch** a dataset (parked path)        |
+| Datasets        | List datasets; upload station CSVs (Create Dataset) or a single CSV |
+| Dataset Details | Metadata, persisted analysis, station-location map, stations/measurements tables |
 | Components      | List components; register one (name, endpoint URL, description)     |
 | Executions      | Select a dataset + component, map the dataset's measurements to the component's expected ones, execute, view result |
-| Map             | Two modes — **Dataset** (preview geometry) and **Result** (execution output) — rendered as GeoJSON layers with a values chart |
 
-### GeoJSON rendering
+### Station map rendering
 
-The Map and Dataset Details pages render a `FeatureCollection` using MapLibre
-GeoJSON source + layers: `circle` for points, `line` for LineStrings, and `fill`
-for Polygons/MultiPolygons. Features are colored on a green→red scale by a detected
-numeric property (`value`, else `pm25`/`congestion`, else the first numeric field),
-and point values are shown as labels.
+The Dataset Details page renders a station-location `FeatureCollection` (built from a
+dataset's extracted stations) using a MapLibre GeoJSON source + a `circle` layer, with a
+click-to-show-metadata popup. Stations without coordinates are omitted.
 
 ### User flow
 
-Register a **Data Source** → **Fetch** a dataset for a date range (auto-analyzed) →
-open **Dataset Details** to see the persisted analysis, geometry, and map preview →
-**Executions** page: select the dataset + a component, optionally tick which
-columns/properties to keep and a row limit, then **Execute** → the result is a GeoJSON
-`FeatureCollection` → open **Map**, switch to **Result** mode, and select the execution
-to see the colored features plus a values chart. *(Uploading a GeoJSON file is an
-alternative to fetching.)*
+Create a **dataset** via **Datasets → Create Dataset** (upload station CSV files and
+assign each column a role) → open **Dataset Details** to see the persisted stations,
+the station map, and the measurements → **Executions** page: select the dataset + a
+component, map the dataset's measurements to the component's expected ones, then
+**Execute** → the result is a GeoJSON `FeatureCollection`, stored on the execution and
+shown as JSON (a dedicated result view is deferred).

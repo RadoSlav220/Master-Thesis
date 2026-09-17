@@ -22,7 +22,8 @@ and the reasoning behind key decisions.
 - `data-analysis-service/` — Python 3.12 FastAPI + Pandas microservice (structure
   analysis). Uses ruff + pytest.
 - `docker-compose.yml` (postgres + backend + frontend + data-analysis-service),
-  `.env.example`, `sample-data/` (Sofia GeoJSON samples).
+  `.env.example`, `sample-data/` (Sofia sample CSVs; the two `.geojson` files there are now
+  legacy — GeoJSON is no longer an accepted upload format, see the CSV-only decision below).
 - Each subproject has its **own `.gitignore`** (language/build rules); the root
   `.gitignore` holds only cross-cutting rules (OS/editor/env/secrets).
 - **CI** (`.github/workflows/build.yml`) runs three jobs on push: `build-backend`
@@ -33,8 +34,10 @@ and the reasoning behind key decisions.
 
 **Manual CSV upload** of station + measurement data → **auto-analyze + persist** → **map** the
 dataset's measurements to a **component**'s expected measurements → run the analytical component →
-**visualize** the GeoJSON result on MapLibre. Analytical models are **mocked** for now, and
-**components are predefined** (users cannot register them).
+inspect the component's GeoJSON result. Analytical models are **mocked** for now, and
+**components are predefined** (users cannot register them). (Result *visualization* is deferred:
+the Map tab was removed — issue #84/#85 — until the model output shape is decided; results are
+shown as raw JSON for now. GeoJSON remains only as the component input/output format, not a map view.)
 
 The **primary ingestion path is manual upload** (mentor meeting 2026-08-22): the user uploads
 one or more **CSV** files describing measuring stations (at minimum `stationId`, `latitude`,
@@ -75,8 +78,9 @@ scope note below.
   the dataset's stored representation — GeoJSON point features per station (coords → geometry,
   attributes/measurements → properties) — and runs the existing auto-analyze + persist step.
   GeoJSON here is only the **internal storage/consumption** format (what the map + components
-  already use); it is **not** an accepted upload format. The existing generic CSV+GeoJSON
-  upload path (`/datasets/upload`) is left untouched and coexists with this station-based flow.
+  already use); it is **not** an accepted upload format. The existing generic single-file
+  upload path (`/datasets/upload`) is **CSV-only** (issue #86/#87 removed GeoJSON as an accepted
+  dataset type) and coexists with this station-based flow.
   Rationale for choosing upload over live fetch: real sensor APIs split station metadata and
   measurements across separate endpoints (would force users to describe a whole fetch pipeline),
   and HTTP fetching is fragile — too complex for now. Tracked as epic #63 (sub-issues #64/#65/#66).
@@ -89,7 +93,7 @@ scope note below.
   reconstructed in the backend (`StationCsvZipBuilder`) as a **`.zip` of `stations.csv` +
   `measurements.csv`** — measurements **wide** (one column per `measurementType`), headers named so
   the archive round-trips back through Create Dataset. Content-based datasets still download as a
-  single CSV/GeoJSON file. Issue #72.
+  single CSV file. Issue #72.
 - **Components are predefined** — users **cannot** register or edit analytical components
   (mentor meeting 2026-08-22). Predefined components are **seeded** (the `demo` profile
   auto-registers the mocks; real ones arrive via the "real components" epic). The user-facing
@@ -109,7 +113,9 @@ scope note below.
   bullet below — that design deliberately reuses the station-upload pipeline instead). The
   description below records how the API path works today, for reference until it is removed.
   `type` is a `DataSourceType` **enum** = `API` (with `DATABASE`
-  reserved for later) + an `outputFormat` of `CSV` or `GEOJSON`. At registration a source
+  reserved for later) + an `outputFormat` that is now **CSV-only** (issue #86/#87 removed the
+  `GEOJSON` output format and the two GeoJSON demo sources — USGS/Geoapify — from the `demo`
+  bootstrap; `DataSourceFetcher`'s mock generates CSV only). At registration a source
   also declares the **query parameters** its API expects (name, `required` flag, optional
   `defaultValue`). These definitions are stored **relationally** as a
   `@ElementCollection<QueryParameterDefinition>` (table `data_source_query_parameters`,
@@ -167,9 +173,9 @@ scope note below.
   expected names; execution is **blocked (400, `InvalidExecutionException`)** if any expected
   measurement is unmapped. The chosen mapping is persisted on the execution as `measurementMapping`
   (JSON provenance). For station-based datasets `StationGeoJsonBuilder` then synthesizes a GeoJSON
-  FeatureCollection embedding each mapped measurement's **full time series** in feature properties;
-  content-based GeoJSON datasets pass their stored content through unchanged. (This replaced the earlier
-  v1 filter — column/row selection — which was redundant once mapping governs what reaches the model.)
+  FeatureCollection embedding each mapped measurement's **full time series** in feature properties.
+  (This replaced the earlier v1 filter — column/row selection — which was redundant once mapping
+  governs what reaches the model.)
 - **Mock components** — `/mock-components/air-quality` and `/traffic` return GeoJSON
   FeatureCollections. A `demo` Spring profile auto-registers them on startup. (Components are
   **predefined/seeded**, not user-registered — see the "Components are predefined" decision above.)
