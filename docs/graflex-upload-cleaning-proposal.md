@@ -147,7 +147,10 @@ does (with an error report). No half-created dataset is possible.
 
 ## 6. Proposed flow — Data Cleaning
 
-A dedicated **Cleaning** area lets the user turn raw imported data into a cleaned version.
+A dedicated **Cleaning** area lets the user turn raw imported data into a cleaned version. The
+cleaning *action* is three steps (below); alongside it runs a **data-quality view** that the user
+consults *both before and after* — described after the steps, because it is not a step in the
+sequence but a view referenced around them.
 
 ### Step 1 — A Cleaning tab/section
 Operates on the dataset's *raw* version and produces a *cleaned* version. GraFlex keeps these as
@@ -166,25 +169,24 @@ missing values* (median / forward-fill / constant), *enforce valid ranges* (clip
 On commit, GraFlex applies the steps, writes the cleaned version, and **saves the cleaning recipe**
 (the ordered list of steps) as a reusable, versioned config.
 
-> **No separate "preview" step.** An earlier design previewed per-step row counts before committing.
-> That was dropped: raw row counts ("48 cells changed") are developer telemetry, not something a user
-> can act on. Committing is safe to do directly because cleaning is **non-destructive and
-> re-runnable** — the raw version is never touched, and each commit mints a new cleaned version. The
-> meaningful "did this help?" feedback comes from the data-quality view below, not from a row-count
-> preview.
+### The data-quality view — consulted *before* and *after* (not a step)
+A small data-quality summary — *how many values hit a missing-sentinel, how many are out of range,
+time gaps, stuck sensors* — computed by GraFlex's read-only "exploratory analysis" (EDA) stage. It
+is the same report run against two versions:
 
-### Step 4 — A data-quality view: **before and after** cleaning
-The cleaning tab shows a small data-quality summary — *how many values hit a missing-sentinel, how
-many are out of range, time gaps, stuck sensors* — computed by GraFlex's read-only "exploratory
-analysis" (EDA) stage. It is shown **twice**: against the **raw** version (to decide *which* steps to
-apply) and, after committing, against the **cleaned** version (to confirm the steps *worked*).
+- **Before** (against `raw`) — so the user can *see the problems* and choose the right steps in
+  Step 2.
+- **After** (against `cleaned`) — so the user can *confirm the steps worked*.
+
+Because it reads whichever version it is pointed at, it is not a stage in the pipeline — it is a lens
+the user looks through on either side of the cleaning action.
 
 > **Why this replaces a preview.** Running the *same* quality report on raw then cleaned gives a
 > genuine **before/after** in terms a user understands — "PM2.5 sentinels: 12% → 0%", "out-of-range
 > values: 40 → 0" — instead of opaque row counts. It is what lets the user (a) pick the right steps
 > because they can *see* the problems, and (b) verify the result, closing the loop that a preview only
-> half-opened. Because cleaning is re-runnable, the flow is: see problems → clean → confirm → adjust
-> and re-clean if needed.
+> half-opened. Because cleaning is re-runnable, the loop is: **see problems → clean → confirm →**
+> adjust and re-clean if needed.
 >
 > A full analysis UI is not needed for a first version — even a simple "per-column summary + problem
 > counts" is enough — but this view is the **primary feedback mechanism** for cleaning, not an
@@ -294,7 +296,7 @@ endpoints while the platform side builds the UI and translation logic in paralle
 | 1 | `POST /datasets` *(atomic: schema(s) + import in one transaction)* | *(new — wraps `save_entity_schema` + `import_csv_text` in one DB transaction)* | **Upload** |
 | 2 | `GET /cleaning-steps` | *(new — enumerate registered steps + param schema)* | Cleaning step 2 |
 | 3 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 3 |
-| 4 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality before/after (cleaning step 4) |
+| 4 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality view, before/after cleaning (§6) |
 | 5 | `GET /entities/{entity}/versions` | `list_versions` | Show data in UI |
 | 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Show data in UI |
 
@@ -446,7 +448,7 @@ cleaning dialog build itself from what GraFlex supports.
 
 Runs GraFlex's read-only exploratory analysis against a stored version. Called against `raw` before
 cleaning (to show what is wrong) and against `cleaned` after (to confirm it worked) — the before/after
-feedback that replaced the old row-count preview (see §6 step 4).
+feedback that replaced the old row-count preview (see §6, "The data-quality view").
 
 **Request** — a list of analysis steps (GraFlex's `EdaConfig`), and which version to analyse:
 ```json
@@ -483,7 +485,7 @@ out-of-range counts, missingness per column). Shape mirrors GraFlex's `EdaReport
 1. **Which GraFlex ingestion path does the upload feed?** GraFlex has both a *generic* per-schema
    import (flexible column shapes) and a *fixed* "collection" table set (hardcoded columns for the
    Sofia air-quality dataset). This plan assumes the **generic** path. We should confirm which one
-   the upload should target — it changes step 4/5.
+   the upload should target — it changes the upload flow (§5 steps 4–5).
 2. **Who authors the schema — interactively at upload, or from a stored template?** This plan
    proposes interactive authoring at upload time.
 3. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
