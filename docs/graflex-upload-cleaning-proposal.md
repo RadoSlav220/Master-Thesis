@@ -131,14 +131,6 @@ The platform sends the schema(s) **and** the CSV to a **single** GraFlex endpoin
 schema(s) and imports the rows **inside one database transaction**: either both land, or neither
 does (with an error report). No half-created dataset is possible.
 
-> **Why one atomic call, not two separate steps?** An earlier design used two calls — save schema,
-> then import. That has an integrity gap: the schema commits, then the import is refused (e.g. the
-> file is missing a required column), leaving an **orphaned schema** with no data. Across the
-> platform↔GraFlex boundary there is no shared transaction, so the platform cannot roll the schema
-> back. But **GraFlex owns both tables in its own database**, so it *can* wrap the schema-save and
-> the import in a single transaction — which removes the orphan window entirely. Since GraFlex is
-> ours to change, we design the problem away rather than mitigate it.
-
 > **Success policy (to confirm with Lyudmil).** Import has two failure shades:
 > - **Structural refusal** — the file does not match the schema (a required column is missing).
 >   Nothing usable landed → **roll back the whole transaction** (schema included) and return the
@@ -151,10 +143,10 @@ does (with an error report). No half-created dataset is possible.
 > Either way the platform shows the **import report** (rows read/written, violations, refusal
 > reason) in the UI, and only records its own dataset metadata when the call succeeds.
 
-> **The granular endpoints still exist.** GraFlex keeps a standalone "save schema" and a standalone
-> "import into an existing entity" (see §9) — used for defining a schema without data, or appending
-> more CSVs to a dataset that already exists. The **upload flow** uses the atomic create-dataset
-> endpoint; the granular ones serve append/advanced cases.
+> **One ingestion endpoint only.** The contract exposes *no* standalone "save a schema" or "import
+> into an existing entity" — the atomic create-dataset call is the single way data enters. This keeps
+> the API minimal and makes an orphaned schema structurally impossible. Appending more data to an
+> existing dataset is a **deferred** question (the MVP treats one upload as one dataset) — see §10.
 
 ---
 
@@ -173,8 +165,7 @@ missing values* (median / forward-fill / constant), *enforce valid ranges* (clip
 
 > **Recommendation:** GraFlex should expose a "list of available cleaning steps and their settings"
 > so the dialog can be **built dynamically** from what GraFlex actually supports, rather than the
-> frontend hardcoding each step's form. If that is too much for a first version, we start with a
-> small curated set of steps and expand later.
+> frontend hardcoding each step's form.
 
 ### Step 3 — Preview before committing
 Before writing anything, the user sees a **preview**: how many rows/columns each step changes.
@@ -304,111 +295,89 @@ endpoints while the platform side builds the UI and translation logic in paralle
 
 | # | Endpoint | GraFlex function | Used by |
 |---|---|---|---|
-| 1 | `POST /datasets` *(atomic: schema(s) + import in one transaction)* | *(new — wraps `save_entity_schema` + `import_csv_text` in one DB transaction)* | **Upload (primary path)** |
-| 2 | `POST /entities` | `save_entity_schema` | Save a schema alone (advanced) |
-| 3 | `POST /entities/{entity}/import` | `import_csv_text` | Append more CSV to an existing entity |
-| 4 | `GET /cleaning-steps` | *(new — enumerate registered steps + param schema)* | Cleaning step 2 |
-| 5 | `POST /entities/{entity}/clean/preview` | `preview_clean` | Cleaning step 3 |
-| 6 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 4 |
-| 7 | `GET /entities/{entity}/versions` | `list_versions` | Show data in UI |
-| 8 | `GET /entities/{entity}/versions/{version}` | `read_version` | Show data in UI |
-| 9 | `POST /entities/{entity}/eda` *(optional)* | `run_eda` | Quality view (cleaning step 5) |
+| 1 | `POST /datasets` *(atomic: schema(s) + import in one transaction)* | *(new — wraps `save_entity_schema` + `import_csv_text` in one DB transaction)* | **Upload** |
+| 2 | `GET /cleaning-steps` | *(new — enumerate registered steps + param schema)* | Cleaning step 2 |
+| 3 | `POST /entities/{entity}/clean/preview` | `preview_clean` | Cleaning step 3 |
+| 4 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 4 |
+| 5 | `GET /entities/{entity}/versions` | `list_versions` | Show data in UI |
+| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Show data in UI |
+| 7 | `POST /entities/{entity}/eda` *(optional)* | `run_eda` | Quality view (cleaning step 5) |
 
 > Two endpoints are genuinely **new** work: the atomic `POST /datasets` (#1) needs a thin
-> transactional wrapper around the two existing functions so schema-save and import commit or roll
-> back together (see §5 step 5); and `GET /cleaning-steps` (#4) enumerates the registered cleaning
-> steps. Everything else wraps a function that already exists. The **upload flow uses #1**; the
-> granular #2/#3 stay available for defining a schema without data, or appending to an existing one.
+> transactional wrapper around GraFlex's existing `save_entity_schema` + `import_csv_text` so the
+> two commit or roll back together (see §5 step 5); and `GET /cleaning-steps` (#2) enumerates the
+> registered cleaning steps. Everything else wraps a function that already exists.
+>
+> **Ingestion is deliberately a single endpoint.** There is no standalone "save a schema" or
+> "import into an existing entity" in the contract: the MVP treats one upload as one dataset, so the
+> atomic `POST /datasets` is the only way data enters. This keeps the API minimal and makes an
+> orphaned schema *structurally impossible* — there is no way to create a schema without data. (The
+> underlying `save_entity_schema` / `import_csv_text` functions still exist inside GraFlex; they are
+> just not exposed separately. Appending data to an existing dataset is a deferred question — see §10.)
 
 
 > The shapes below are illustrative and follow GraFlex's existing data models
 > (`EntitySchema`, `CleaningConfig`, `ImportReport`, …). Field names/exact structure are for
 > discussion — the point is to make the contract concrete, not final.
 
-### 9.1 `POST /datasets` — atomic create (schema(s) + import) — **the upload path**
+### 9.1 `POST /datasets` — atomic create (schema(s) + import) — **the ingestion endpoint**
 
-The one call the upload flow uses. Sends the schema(s) and the CSV together; GraFlex saves the
-schema(s) and imports the rows **in a single transaction** (all-or-nothing — no orphaned schema).
+The single call by which data enters the platform. Sends the schema(s) and the CSV together;
+GraFlex saves the schema(s) and imports the rows **in one transaction** (all-or-nothing — no
+orphaned schema possible).
 
 **Request** — `multipart/form-data`: the CSV file(s) + a JSON part carrying the schema(s) and the
-column mapping. The JSON part:
+column mapping:
 ```json
 {
-  "schemas": [ { "...static station schema..." }, { "...timeseries measurement schema..." } ],
+  "schemas": [
+    {
+      "id": "sofia_station",
+      "temporality": "static",
+      "keys": { "primary": ["point_id"] },
+      "columns": [
+        { "name": "point_id",  "type": "string",  "role": "entity_id", "nullable": false },
+        { "name": "name",      "type": "string",  "role": "metadata" },
+        { "name": "latitude",  "type": "float64", "role": "spatial",   "nullable": false },
+        { "name": "longitude", "type": "float64", "role": "spatial",   "nullable": false }
+      ]
+    },
+    {
+      "id": "sofia_air_quality",
+      "temporality": "timeseries",
+      "keys": { "primary": ["point_id", "timestamp"] },
+      "columns": [
+        { "name": "point_id",  "type": "string",    "role": "entity_id",  "nullable": false,
+          "references": "sofia_station.point_id" },
+        { "name": "timestamp", "type": "timestamp", "role": "event_time", "nullable": false },
+        { "name": "pm2_5",     "type": "float64",   "role": "measure", "unit": "ug/m3",
+          "valid_range": [0, 500], "missing_sentinels": [-999] },
+        { "name": "no2",       "type": "float64",   "role": "measure", "unit": "ug/m3",
+          "valid_range": [0, 1000] }
+      ]
+    }
+  ],
   "primary_entity": "sofia_air_quality",
   "column_mapping": { "station": "point_id", "lat": "latitude", "ts": "timestamp", "pm25": "pm2_5" }
 }
 ```
-(The two schema objects have the shape shown in §9.2 below.)
 
-**Response** `200 OK` — the same **import report** as §9.3, plus the created entity/version. On a
-**structural refusal** the whole transaction is rolled back (schema not saved) and the response is
-`refused: true` with `missing_required_columns`; **row-level coercion errors** are committed-with-report
-(see the success policy in §5 step 5 and the open question in §10).
+The two schemas capture GraFlex's static-station / timeseries-measurement split (§5 step 4). Roles
+are GraFlex's five semantic roles (`entity_id`, `event_time`, `spatial`, `measure`, `metadata`); the
+platform maps its upload roles onto these (§5 step 4). `valid_range`, `missing_sentinels`, and
+`domain` are the optional data-quality hints from §5 step 3.
 
-### 9.2 `POST /entities` — save an entity schema (granular; advanced/append)
-
-A single upload describes **two** entities (the static station entity, then the timeseries
-measurement entity that references it) — the atomic `POST /datasets` above carries both. This
-granular endpoint saves one schema at a time, for defining a schema without immediately importing.
-
-**Request** (the static station entity):
+**Response** `200 OK` — an **import report** (GraFlex's `ImportReport`), plus the created
+entity/version:
 ```json
 {
-  "id": "sofia_station",
-  "temporality": "static",
-  "keys": { "primary": ["point_id"] },
-  "columns": [
-    { "name": "point_id",  "type": "string",  "role": "entity_id", "nullable": false },
-    { "name": "name",      "type": "string",  "role": "metadata" },
-    { "name": "latitude",  "type": "float64", "role": "spatial",   "nullable": false },
-    { "name": "longitude", "type": "float64", "role": "spatial",   "nullable": false }
-  ]
-}
-```
-
-**Request** (the timeseries measurement entity — note the optional quality hints from upload step 3):
-```json
-{
-  "id": "sofia_air_quality",
-  "temporality": "timeseries",
-  "keys": { "primary": ["point_id", "timestamp"] },
-  "columns": [
-    { "name": "point_id",  "type": "string",    "role": "entity_id",  "nullable": false,
-      "references": "sofia_station.point_id" },
-    { "name": "timestamp", "type": "timestamp", "role": "event_time", "nullable": false },
-    { "name": "pm2_5",     "type": "float64",   "role": "measure", "unit": "ug/m3",
-      "valid_range": [0, 500], "missing_sentinels": [-999] },
-    { "name": "no2",       "type": "float64",   "role": "measure", "unit": "ug/m3",
-      "valid_range": [0, 1000] }
-  ]
-}
-```
-
-**Response** `201 Created`:
-```json
-{ "entity": "sofia_air_quality", "version": 1, "is_latest": true }
-```
-
-Roles are GraFlex's five semantic roles (`entity_id`, `event_time`, `spatial`, `measure`,
-`metadata`); the platform maps its upload roles onto these (see §5 step 4). `valid_range`,
-`missing_sentinels`, and `domain` are the optional data-quality hints from §5 step 3.
-
-### 9.3 `POST /entities/{entity}/import` — import a CSV against the schema
-
-**Request** — `multipart/form-data`: the raw CSV file, plus the entity it targets. (GraFlex's
-`import_csv_text` takes the CSV body and the entity name.)
-
-**Response** `200 OK` — an **import report** (GraFlex's `ImportReport`):
-```json
-{
+  "entity": "sofia_air_quality",
+  "version": 1,
   "source": "sofia-air-quality.csv",
   "refused": false,
   "missing_required_columns": [],
   "rows_read": 8760,
   "rows_written": 8742,
-  "rows_inserted": 8742,
-  "rows_updated": 0,
   "row_errors": [
     { "row": 412, "column": "timestamp", "message": "could not parse '2026-13-01' as timestamp" }
   ],
@@ -419,18 +388,18 @@ Roles are GraFlex's five semantic roles (`entity_id`, `event_time`, `spatial`, `
 }
 ```
 
-**Refusal** (a required column is missing — nothing is written) is still `200 OK` with:
+**On a structural refusal** (a required column is missing) the whole transaction is rolled back — the
+schema is *not* saved — and the response is `refused: true` with `missing_required_columns`:
 ```json
-{ "source": "sofia-air-quality.csv", "refused": true,
-  "missing_required_columns": ["timestamp"], "rows_read": 0, "rows_written": 0 }
+{ "refused": true, "missing_required_columns": ["timestamp"], "rows_read": 0, "rows_written": 0 }
 ```
 
-> A **refusal** returns `200` with `refused: true` and `missing_required_columns` — it is an
-> expected, user-facing outcome, not an error. The atomic `POST /datasets` (§9.1) reuses this same
-> report shape and rolls the schema back on a refusal; this granular endpoint (used for appending to
-> an already-created entity) simply reports it, since there is no schema to roll back.
+> A refusal is **not an error** — it is a `200` with `refused: true`, an expected user-facing outcome
+> the UI surfaces. **Row-level coercion errors** (a few cells that don't parse) are handled per the
+> success policy in §5 step 5 (recommended: commit the good rows, report the bad ones) — see the open
+> question in §10.
 
-### 9.4 `GET /cleaning-steps` — enumerate available cleaning steps
+### 9.2 `GET /cleaning-steps` — enumerate available cleaning steps
 
 The one genuinely **new** thing GraFlex must expose (the rest wrap existing functions). Lets the
 cleaning dialog build itself from what GraFlex supports.
@@ -453,7 +422,7 @@ cleaning dialog build itself from what GraFlex supports.
 }
 ```
 
-### 9.5 `POST /entities/{entity}/clean/preview` — preview without writing
+### 9.3 `POST /entities/{entity}/clean/preview` — preview without writing
 
 **Request** — a cleaning recipe (GraFlex's `CleaningConfig`: an ordered list of steps):
 ```json
@@ -477,7 +446,7 @@ cleaning dialog build itself from what GraFlex supports.
 }
 ```
 
-### 9.6 `POST /entities/{entity}/clean` — commit a cleaning recipe
+### 9.4 `POST /entities/{entity}/clean` — commit a cleaning recipe
 
 **Request** — same recipe as preview, plus a `name` to save it under:
 ```json
@@ -501,7 +470,7 @@ cleaning dialog build itself from what GraFlex supports.
 }
 ```
 
-### 9.7 / 9.8 — list and read stored versions
+### 9.5 / 9.6 — list and read stored versions
 
 `GET /entities/{entity}/versions` →
 ```json
@@ -510,7 +479,7 @@ cleaning dialog build itself from what GraFlex supports.
 
 `GET /entities/{entity}/versions/{version}?limit=100` → a page of rows (JSON records) for display.
 
-### 9.9 `POST /entities/{entity}/eda` *(optional)* — data-quality report
+### 9.7 `POST /entities/{entity}/eda` *(optional)* — data-quality report
 
 **Request** — a list of analysis steps (GraFlex's `EdaConfig`):
 ```json
@@ -527,8 +496,8 @@ GraFlex's `EdaReport` sections.
 - **Errors**: `400` for a bad schema / bad step config (GraFlex validates before touching data);
   `404` for an unknown entity/version. An import *refusal* is **not** an error — it is a `200`
   with `refused: true`, because it is an expected, user-facing outcome.
-- **Transport**: same posture as the existing Python service — plain HTTP/1.1, multipart where a
-  file is uploaded (the atomic `POST /datasets` and the granular import); everything else is JSON.
+- **Transport**: same posture as the existing Python service — plain HTTP/1.1, multipart for the
+  ingestion endpoint (`POST /datasets`, which carries the CSV file); everything else is JSON.
 
 ---
 
@@ -553,6 +522,10 @@ GraFlex's `EdaReport` sections.
    fine, do we **commit the good rows and report the bad ones** (recommended — cleaning handles the
    rest), or **roll back the whole upload** on any row error, or apply a **threshold** (commit if the
    error rate is below X%)? This is a policy choice for the atomic endpoint, to agree with Lyudmil.
+7. **Can a dataset accumulate data from multiple uploads?** The MVP treats one upload as one dataset,
+   so the contract exposes only the atomic `POST /datasets`. If a dataset should instead grow over
+   time (e.g. upload January, then February, into the same entity), a standalone "import into an
+   existing entity" endpoint is needed — deferred, and purely additive if it turns out to be wanted.
 
 ---
 
