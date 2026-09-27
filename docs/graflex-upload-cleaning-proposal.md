@@ -274,10 +274,9 @@ section is the **contract** between the two workstreams.
 1. **Confirm the ingestion target.** The plan assumes GraFlex's **generic per-schema import**
    (the user authors a schema at upload; data lands in `<entity>__raw`). GraFlex also has a *fixed*
    "collection" table set (hardcoded columns for the Sofia air-quality dataset), written by a separate
-   acquisition component. We could not tell from the code alone which is the intended route — confirm
-   with Lyudmil that the generic path is the one the upload should feed. (If not, §5 steps 4–5 change.)
+   acquisition component. Confirm that the generic path is the one the upload should feed.
 2. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
-   to the user for the thesis MVP, versus running with sensible defaults behind the scenes?
+   to the user?
 3. **Partial-import success policy.** The atomic `POST /datasets` (§9) rolls back on a *structural
    refusal* (a required column is missing). But when *some rows* fail type coercion while most are
    fine, do we **commit the good rows and report the bad ones** (recommended — cleaning handles the
@@ -287,5 +286,3 @@ section is the **contract** between the two workstreams.
    so the contract exposes only the atomic `POST /datasets`. If a dataset should instead grow over
    time (e.g. upload January, then February, into the same entity), a standalone "import into an
    existing entity" endpoint is needed — deferred, and purely additive if it turns out to be wanted.
-5. **Endpoint ownership & timeline** (process, not design) — agreeing the §9 list and who builds what,
-   when.
