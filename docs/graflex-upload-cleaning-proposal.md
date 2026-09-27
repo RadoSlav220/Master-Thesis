@@ -143,7 +143,8 @@ does (with an error report). No half-created dataset is possible.
 > Either way the platform shows the **import report** (rows read/written, violations, refusal
 > reason) in the UI, and only records its own dataset metadata when the call succeeds.
 >
-> After a successful import the UI also shows **a few sample rows** (≈10, via §9.6) so the user can
+> After a successful import the UI also shows **a few sample rows** (≈10, via the read-rows endpoint,
+> §9) so the user can
 > confirm at a glance that the column mapping landed correctly — the one check the aggregate import
 > report and EDA cannot make (a wrong-column mapping can still produce plausible statistics).
 
@@ -152,7 +153,8 @@ Opening a dataset shows a **map of its stations**: one marker per station at its
 marker → that station's metadata (id, name, attributes). This preserves the current platform
 behaviour and is the natural spatial view of a station dataset.
 
-The platform reads the **static station entity** in full (via §9.6 — a small, bounded set: tens to
+The platform reads the **static station entity** in full (via the read-rows endpoint, §9 — a small,
+bounded set: tens to
 hundreds of stations) and builds the map's GeoJSON `FeatureCollection` from those rows; GraFlex just
 returns the station table. Stations without coordinates are simply not plotted. (The station map
 answers *"where are the stations, and what are they?"*; the EDA view answers *"how good is the
@@ -259,7 +261,6 @@ section is the **contract** between the two workstreams.
 | 5 | `GET /entities/{entity}/versions` | `list_versions` | Which versions exist (drives the UI) |
 | 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Station rows (map) + measurement sample (mapping check) |
 
->
 > **Ingestion is deliberately a single endpoint.** There is no standalone "save a schema" or
 > "import into an existing entity" in the contract: the MVP treats one upload as one dataset, so the
 > atomic `POST /datasets` is the only way data enters. This keeps the API minimal and makes an
@@ -267,175 +268,23 @@ section is the **contract** between the two workstreams.
 > underlying `save_entity_schema` / `import_csv_text` functions still exist inside GraFlex; they are
 > just not exposed separately. Appending data to an existing dataset is a deferred question — see §10.)
 
+> **Request/response bodies are deferred.** This section fixes *which* endpoints exist and *what they
+> map to*; the exact request/response shapes (which follow GraFlex's existing `EntitySchema` /
+> `CleaningConfig` / `ImportReport` / `EdaReport` models) are to be worked out with Lyudmil when the
+> endpoints are built.
 
-> The shapes below are illustrative and follow GraFlex's existing data models
-> (`EntitySchema`, `CleaningConfig`, `ImportReport`, …). Field names/exact structure are for
-> discussion — the point is to make the contract concrete, not final.
+### Behavioural notes (the decisions behind the endpoints)
 
-### 9.1 `POST /datasets` — atomic create (schema(s) + import) — **the ingestion endpoint**
-
-The single call by which data enters the platform. Sends the schema(s) and the CSV together;
-GraFlex saves the schema(s) and imports the rows **in one transaction** (all-or-nothing — no
-orphaned schema possible).
-
-**Request** — `multipart/form-data`: the CSV file(s) + a JSON part carrying the schema(s) and the
-column mapping:
-```json
-{
-  "schemas": [
-    {
-      "id": "sofia_station",
-      "temporality": "static",
-      "keys": { "primary": ["point_id"] },
-      "columns": [
-        { "name": "point_id",  "type": "string",  "role": "entity_id", "nullable": false },
-        { "name": "name",      "type": "string",  "role": "metadata" },
-        { "name": "latitude",  "type": "float64", "role": "spatial",   "nullable": false },
-        { "name": "longitude", "type": "float64", "role": "spatial",   "nullable": false }
-      ]
-    },
-    {
-      "id": "sofia_air_quality",
-      "temporality": "timeseries",
-      "keys": { "primary": ["point_id", "timestamp"] },
-      "columns": [
-        { "name": "point_id",  "type": "string",    "role": "entity_id",  "nullable": false,
-          "references": "sofia_station.point_id" },
-        { "name": "timestamp", "type": "timestamp", "role": "event_time", "nullable": false },
-        { "name": "pm2_5",     "type": "float64",   "role": "measure", "unit": "ug/m3",
-          "valid_range": [0, 500], "missing_sentinels": [-999] },
-        { "name": "no2",       "type": "float64",   "role": "measure", "unit": "ug/m3",
-          "valid_range": [0, 1000] }
-      ]
-    }
-  ],
-  "primary_entity": "sofia_air_quality",
-  "column_mapping": { "station": "point_id", "lat": "latitude", "ts": "timestamp", "pm25": "pm2_5" }
-}
-```
-
-The two schemas capture GraFlex's static-station / timeseries-measurement split (§5 step 4). Roles
-are GraFlex's five semantic roles (`entity_id`, `event_time`, `spatial`, `measure`, `metadata`); the
-platform maps its upload roles onto these (§5 step 4). `valid_range`, `missing_sentinels`, and
-`domain` are the optional data-quality hints from §5 step 3.
-
-**Response** `200 OK` — an **import report** (GraFlex's `ImportReport`), plus the created
-entity/version:
-```json
-{
-  "entity": "sofia_air_quality",
-  "version": 1,
-  "source": "sofia-air-quality.csv",
-  "refused": false,
-  "missing_required_columns": [],
-  "rows_read": 8760,
-  "rows_written": 8742,
-  "row_errors": [
-    { "row": 412, "column": "timestamp", "message": "could not parse '2026-13-01' as timestamp" }
-  ],
-  "violations": [
-    { "column": "pm2_5", "null_count": 30, "sentinel_count": 18, "out_of_range_count": 2,
-      "unknown_domain_count": 0 }
-  ]
-}
-```
-
-**On a structural refusal** (a required column is missing) the whole transaction is rolled back — the
-schema is *not* saved — and the response is `refused: true` with `missing_required_columns`:
-```json
-{ "refused": true, "missing_required_columns": ["timestamp"], "rows_read": 0, "rows_written": 0 }
-```
-
-> A refusal is **not an error** — it is a `200` with `refused: true`, an expected user-facing outcome
-> the UI surfaces. **Row-level coercion errors** (a few cells that don't parse) are handled per the
-> success policy in §5 step 5 (recommended: commit the good rows, report the bad ones) — see the open
-> question in §10.
-
-### 9.2 `GET /cleaning-steps` — enumerate available cleaning steps
-
-The one genuinely **new** thing GraFlex must expose (the rest wrap existing functions). Lets the
-cleaning dialog build itself from what GraFlex supports.
-
-**Response** `200 OK`:
-```json
-{
-  "steps": [
-    { "type": "replace_sentinels_with_null", "description": "Turn declared missing sentinels into nulls.",
-      "params": [] },
-    { "type": "fill_missing", "description": "Fill a column's nulls.",
-      "params": [
-        { "name": "column", "type": "string", "required": true },
-        { "name": "method", "type": "enum", "options": ["median", "forward", "constant"], "required": true },
-        { "name": "value",  "type": "number", "required": false }
-      ] },
-    { "type": "enforce_valid_range", "description": "Resolve values outside a column's valid_range.",
-      "params": [ { "name": "action", "type": "enum", "options": ["clip", "null", "drop"], "required": true } ] }
-  ]
-}
-```
-
-### 9.3 `POST /entities/{entity}/clean` — commit a cleaning recipe
-
-**Request** — the cleaning recipe (GraFlex's `CleaningConfig`: an ordered list of steps), plus a
-`name` to save it under:
-```json
-{
-  "name": "sofia_aq/basic",
-  "steps": [
-    { "type": "replace_sentinels_with_null" },
-    { "type": "fill_missing", "config": { "column": "pm2_5", "method": "median" } }
-  ]
-}
-```
-
-**Response** `200 OK` — the cleaning ran, `<entity>__cleaned` was written, the recipe saved:
-```json
-{
-  "entity": "sofia_air_quality",
-  "config_name": "sofia_aq/basic",
-  "config_version": 1,
-  "target_version": "cleaned",
-  "rows_written": 8742
-}
-```
-
-### 9.4 `POST /entities/{entity}/eda` — data-quality report (before/after cleaning)
-
-Runs GraFlex's read-only exploratory analysis against a stored version. Called against `raw` before
-cleaning (to show what is wrong) and against `cleaned` after (to confirm it worked) — the before/after
-feedback that replaced the old row-count preview (see §6, "The data-quality view").
-
-**Request** — a list of analysis steps (GraFlex's `EdaConfig`), and which version to analyse:
-```json
-{ "version": "raw",
-  "steps": [ { "type": "overview" }, { "type": "schema_violations" }, { "type": "missingness" } ] }
-```
-
-**Response** — a read-only report (never persisted) the quality view renders (e.g. sentinel counts,
-out-of-range counts, missingness per column). Shape mirrors GraFlex's `EdaReport` sections.
-
-### 9.5 / 9.6 — list versions, and read rows
-
-`GET /entities/{entity}/versions` — **which versions exist and how big each is** (drives the UI:
-raw only? cleaned too?):
-```json
-{ "versions": [ { "version": "raw", "rows": 8742 }, { "version": "cleaned", "rows": 8742 } ] }
-```
-
-`GET /entities/{entity}/versions/{version}` — returns stored rows as JSON records. It serves **two**
-reads, distinguished by *which entity* and *how many rows*:
-
-- **The station entity, all rows** — the (small, bounded) set of stations, read in full to render the
-  **station-location map** (§5, "Viewing a dataset"): one marker per station at its lat/lon, click →
-  its metadata. The platform builds the map's GeoJSON from these rows; GraFlex just returns the table.
-- **The measurement entity, `?limit=10`** — a tiny sample for an **import sanity check**: the user
-  glances at ~10 real rows to confirm the column mapping landed correctly (e.g. `pm2_5` really holds
-  PM2.5, not the timestamp).
-
-Reading *all* rows is only ever done for the **station** entity (tens–hundreds of rows). The
-**measurement** entity is read sample-only — never dump the full measurements table (thousands of
-rows) to the UI. Understanding data *quality* is the EDA view's job (§9.4), which does it far better
-than any row dump; row reads are for the map and the mapping check, not for browsing data quality.
+- **#1 `POST /datasets` is atomic.** Schema-save and import happen in one GraFlex-side transaction:
+  on a **structural refusal** (a required column is missing) the whole thing rolls back — no orphaned
+  schema. Row-level coercion errors follow the success policy in §5 step 5 (recommended: commit the
+  good rows, report the bad ones). A refusal is an expected outcome the UI surfaces, not an error.
+- **#4 EDA runs before *and* after** cleaning (against `raw`, then `cleaned`) — the before/after
+  data-quality feedback (§6). It is read-only; nothing is persisted.
+- **#6 read_version serves two reads.** The **station** entity is read *in full* to render the station
+  map (small — tens to hundreds of rows); the **measurement** entity is read *sample-only*
+  (`limit≈10`) for the import mapping check. The full measurements table is **never** dumped to the
+  UI — understanding data quality is the EDA view's job (#4), not a row dump.
 
 ### Cross-cutting notes for the contract
 
@@ -460,7 +309,7 @@ than any row dump; row reads are for the map and the mapping check, not for brow
 3. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
    to the user for the thesis MVP, versus running with sensible defaults behind the scenes?
 4. **Endpoint ownership & timeline** — agreeing the §9 list and who builds what, when.
-5. **Partial-import success policy.** The atomic `POST /datasets` (§9.1) rolls back on a *structural
+5. **Partial-import success policy.** The atomic `POST /datasets` (§9) rolls back on a *structural
    refusal* (a required column is missing). But when *some rows* fail type coercion while most are
    fine, do we **commit the good rows and report the bad ones** (recommended — cleaning handles the
    rest), or **roll back the whole upload** on any row error, or apply a **threshold** (commit if the
