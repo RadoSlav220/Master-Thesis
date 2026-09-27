@@ -267,35 +267,6 @@ section is the **contract** between the two workstreams.
 > orphaned schema *structurally impossible* — there is no way to create a schema without data. (The
 > underlying `save_entity_schema` / `import_csv_text` functions still exist inside GraFlex; they are
 > just not exposed separately. Appending data to an existing dataset is a deferred question — see §10.)
-
-> **Request/response bodies are deferred.** This section fixes *which* endpoints exist and *what they
-> map to*; the exact request/response shapes (which follow GraFlex's existing `EntitySchema` /
-> `CleaningConfig` / `ImportReport` / `EdaReport` models) are to be worked out with Lyudmil when the
-> endpoints are built.
-
-### Behavioural notes (the decisions behind the endpoints)
-
-- **#1 `POST /datasets` is atomic.** Schema-save and import happen in one GraFlex-side transaction:
-  on a **structural refusal** (a required column is missing) the whole thing rolls back — no orphaned
-  schema. Row-level coercion errors follow the success policy in §5 step 5 (recommended: commit the
-  good rows, report the bad ones). A refusal is an expected outcome the UI surfaces, not an error.
-- **#4 EDA runs before *and* after** cleaning (against `raw`, then `cleaned`) — the before/after
-  data-quality feedback (§6). It is read-only; nothing is persisted.
-- **#6 read_version serves two reads.** The **station** entity is read *in full* to render the station
-  map (small — tens to hundreds of rows); the **measurement** entity is read *sample-only*
-  (`limit≈10`) for the import mapping check. The full measurements table is **never** dumped to the
-  UI — understanding data quality is the EDA view's job (#4), not a row dump.
-
-### Cross-cutting notes for the contract
-
-- **`project_id`**: GraFlex scopes everything by a project (default `"default"`). For the MVP the
-  platform can pass the implicit default; multi-project is out of scope.
-- **Errors**: `400` for a bad schema / bad step config (GraFlex validates before touching data);
-  `404` for an unknown entity/version. An import *refusal* is **not** an error — it is a `200`
-  with `refused: true`, because it is an expected, user-facing outcome.
-- **Transport**: same posture as the existing Python service — plain HTTP/1.1, multipart for the
-  ingestion endpoint (`POST /datasets`, which carries the CSV file); everything else is JSON.
-
 ---
 
 ## 10. Open questions to resolve together
