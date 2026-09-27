@@ -11,11 +11,8 @@
 
 This document proposes how the **orchestration platform** (Spring backend + React frontend)
 and **GraFlex** (the standalone data platform) should work together for the first two stages
-of the pipeline the user sees: **uploading a dataset** and **cleaning it**.
-
-It is meant as a starting point for discussion. It states not just *what* to build, but
-*why* each choice was made, so we can disagree on specifics without re-deriving the reasoning.
-
+of the pipeline the user sees: **uploading a dataset** and **cleaning it**. 
+It is meant as a starting point for discussion. 
 ---
 
 ## 2. Background: what each system is
