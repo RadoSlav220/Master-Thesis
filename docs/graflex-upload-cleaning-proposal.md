@@ -271,40 +271,21 @@ section is the **contract** between the two workstreams.
 
 ## 10. Open questions to resolve together
 
-1. **Which GraFlex ingestion path does the upload feed?** GraFlex has both a *generic* per-schema
-   import (flexible column shapes) and a *fixed* "collection" table set (hardcoded columns for the
-   Sofia air-quality dataset). This plan assumes the **generic** path. We should confirm which one
-   the upload should target — it changes the upload flow (§5 steps 4–5).
-2. **Who authors the schema — interactively at upload, or from a stored template?** This plan
-   proposes interactive authoring at upload time.
-3. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
+1. **Confirm the ingestion target.** The plan assumes GraFlex's **generic per-schema import**
+   (the user authors a schema at upload; data lands in `<entity>__raw`). GraFlex also has a *fixed*
+   "collection" table set (hardcoded columns for the Sofia air-quality dataset), written by a separate
+   acquisition component. We could not tell from the code alone which is the intended route — confirm
+   with Lyudmil that the generic path is the one the upload should feed. (If not, §5 steps 4–5 change.)
+2. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
    to the user for the thesis MVP, versus running with sensible defaults behind the scenes?
-4. **Endpoint ownership & timeline** — agreeing the §9 list and who builds what, when.
-5. **Partial-import success policy.** The atomic `POST /datasets` (§9) rolls back on a *structural
+3. **Partial-import success policy.** The atomic `POST /datasets` (§9) rolls back on a *structural
    refusal* (a required column is missing). But when *some rows* fail type coercion while most are
    fine, do we **commit the good rows and report the bad ones** (recommended — cleaning handles the
    rest), or **roll back the whole upload** on any row error, or apply a **threshold** (commit if the
-   error rate is below X%)? This is a policy choice for the atomic endpoint, to agree with Lyudmil.
-6. **Can a dataset accumulate data from multiple uploads?** The MVP treats one upload as one dataset,
+   error rate is below X%)?
+4. **Can a dataset accumulate data from multiple uploads?** The MVP treats one upload as one dataset,
    so the contract exposes only the atomic `POST /datasets`. If a dataset should instead grow over
    time (e.g. upload January, then February, into the same entity), a standalone "import into an
    existing entity" endpoint is needed — deferred, and purely additive if it turns out to be wanted.
-
-> Note: questions about **where a prediction's result is stored** (platform vs. GraFlex, and whether
-> the platform keeps a copy) are out of scope here — see
-> [`notes-execution-result-storage.md`](./notes-execution-result-storage.md).
-
----
-
-## 11. Summary
-
-- The platform owns the **upload/mapping/cleaning UX** and **authors GraFlex schemas**; GraFlex owns
-  **storage, processing, and the prediction models**; they talk **over HTTP only**.
-- Upload = read headers in the browser → map roles (+ optional quality hints) → build **two** schemas
-  → **one atomic call** that saves the schema(s) and imports the data in a single transaction (no
-  orphaned schema possible), returning a clear import report.
-- Cleaning = a dedicated tab → pick steps in a dialog (ideally driven by GraFlex's step catalog) →
-  **commit** (which also saves a reusable, versioned recipe), with a lightweight **data-quality view**
-  run **before and after** (raw vs. cleaned) as the feedback — no separate row-count preview.
-- GraFlex **supersedes** `data-analysis-service`, but only **after** its HTTP API exists — the old
-  service stays until then.
+5. **Endpoint ownership & timeline** (process, not design) — agreeing the §9 list and who builds what,
+   when.
