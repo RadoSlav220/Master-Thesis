@@ -147,6 +147,17 @@ does (with an error report). No half-created dataset is possible.
 > confirm at a glance that the column mapping landed correctly — the one check the aggregate import
 > report and EDA cannot make (a wrong-column mapping can still produce plausible statistics).
 
+### Viewing a dataset — the station map
+Opening a dataset shows a **map of its stations**: one marker per station at its lat/lon, click a
+marker → that station's metadata (id, name, attributes). This preserves the current platform
+behaviour and is the natural spatial view of a station dataset.
+
+The platform reads the **static station entity** in full (via §9.6 — a small, bounded set: tens to
+hundreds of stations) and builds the map's GeoJSON `FeatureCollection` from those rows; GraFlex just
+returns the station table. Stations without coordinates are simply not plotted. (The station map
+answers *"where are the stations, and what are they?"*; the EDA view answers *"how good is the
+data?"* — the two are complementary, not alternatives.)
+
 ---
 
 ## 6. Proposed flow — Data Cleaning
@@ -246,7 +257,7 @@ section is the **contract** between the two workstreams.
 | 3 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 3 |
 | 4 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality view, before/after cleaning (§6) |
 | 5 | `GET /entities/{entity}/versions` | `list_versions` | Which versions exist (drives the UI) |
-| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Small row sample — import sanity check |
+| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Station rows (map) + measurement sample (mapping check) |
 
 >
 > **Ingestion is deliberately a single endpoint.** There is no standalone "save a schema" or
@@ -403,7 +414,7 @@ feedback that replaced the old row-count preview (see §6, "The data-quality vie
 **Response** — a read-only report (never persisted) the quality view renders (e.g. sentinel counts,
 out-of-range counts, missingness per column). Shape mirrors GraFlex's `EdaReport` sections.
 
-### 9.5 / 9.6 — list versions, and read a small sample
+### 9.5 / 9.6 — list versions, and read rows
 
 `GET /entities/{entity}/versions` — **which versions exist and how big each is** (drives the UI:
 raw only? cleaned too?):
@@ -411,12 +422,20 @@ raw only? cleaned too?):
 { "versions": [ { "version": "raw", "rows": 8742 }, { "version": "cleaned", "rows": 8742 } ] }
 ```
 
-`GET /entities/{entity}/versions/{version}?limit=10` — **a small sample of rows** (JSON records), for
-an **import sanity check** — the user glances at ~10 real rows to confirm the column mapping landed
-correctly (e.g. `pm2_5` really holds PM2.5, not the timestamp). This is *not* a data-browsing table:
-understanding data quality is the job of the EDA view (§9.4), which EDA does far better than a row
-dump. Row display exists only for the one thing EDA cannot do — catch a wrong-column mapping whose
-statistics still look plausible.
+`GET /entities/{entity}/versions/{version}` — returns stored rows as JSON records. It serves **two**
+reads, distinguished by *which entity* and *how many rows*:
+
+- **The station entity, all rows** — the (small, bounded) set of stations, read in full to render the
+  **station-location map** (§5, "Viewing a dataset"): one marker per station at its lat/lon, click →
+  its metadata. The platform builds the map's GeoJSON from these rows; GraFlex just returns the table.
+- **The measurement entity, `?limit=10`** — a tiny sample for an **import sanity check**: the user
+  glances at ~10 real rows to confirm the column mapping landed correctly (e.g. `pm2_5` really holds
+  PM2.5, not the timestamp).
+
+Reading *all* rows is only ever done for the **station** entity (tens–hundreds of rows). The
+**measurement** entity is read sample-only — never dump the full measurements table (thousands of
+rows) to the UI. Understanding data *quality* is the EDA view's job (§9.4), which does it far better
+than any row dump; row reads are for the map and the mapping check, not for browsing data quality.
 
 ### Cross-cutting notes for the contract
 
