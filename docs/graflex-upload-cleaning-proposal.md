@@ -195,6 +195,7 @@ is the same report run against two versions:
 
 Because it reads whichever version it is pointed at, it is not a stage in the pipeline — it is a lens
 the user looks through on either side of the cleaning action.
+
 ---
 
 ## 7. Why the platform talks to GraFlex over HTTP, never its database directly
@@ -265,6 +266,7 @@ section is the **contract** between the two workstreams.
 > orphaned schema *structurally impossible* — there is no way to create a schema without data. (The
 > underlying `save_entity_schema` / `import_csv_text` functions still exist inside GraFlex; they are
 > just not exposed separately. Appending data to an existing dataset is a deferred question — see §10.)
+
 ---
 
 ## 10. Open questions to resolve together
