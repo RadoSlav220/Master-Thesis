@@ -180,18 +180,6 @@ is the same report run against two versions:
 
 Because it reads whichever version it is pointed at, it is not a stage in the pipeline — it is a lens
 the user looks through on either side of the cleaning action.
-
-> **Why this replaces a preview.** Running the *same* quality report on raw then cleaned gives a
-> genuine **before/after** in terms a user understands — "PM2.5 sentinels: 12% → 0%", "out-of-range
-> values: 40 → 0" — instead of opaque row counts. It is what lets the user (a) pick the right steps
-> because they can *see* the problems, and (b) verify the result, closing the loop that a preview only
-> half-opened. Because cleaning is re-runnable, the loop is: **see problems → clean → confirm →**
-> adjust and re-clean if needed.
->
-> A full analysis UI is not needed for a first version — even a simple "per-column summary + problem
-> counts" is enough — but this view is the **primary feedback mechanism** for cleaning, not an
-> optional extra. It also demonstrates that the platform *understands* the data, a good thesis point.
-
 ---
 
 ## 7. Why the platform talks to GraFlex over HTTP, never its database directly
@@ -202,7 +190,7 @@ tables directly. We propose **not** to, and instead go through GraFlex's HTTP AP
 **Reasons:**
 - **GraFlex's data tables are created dynamically**, named after each entity/version (e.g.
   `station_measurements__cleaned`). If the platform queried them directly, it would be tied to
-  GraFlex's internal naming — and any refactor Lyudmil makes to that layout would silently break
+  GraFlex's internal naming — and any refactoring to that layout would silently break
   the platform.
 - **Clean ownership.** GraFlex owns its schema and storage; the platform owns its own (users,
   components, executions, dataset metadata). An HTTP boundary keeps these from entangling.
@@ -219,53 +207,10 @@ tables directly. We propose **not** to, and instead go through GraFlex's HTTP AP
 The platform reaches dataset *data* by asking GraFlex over HTTP, not by opening a SQL connection to
 GraFlex's database.
 
-### Where execution results are stored (a consequence of this boundary)
-
-Running a prediction produces two related-but-different things, which have different owners:
-
-1. **The execution record** — *"user X ran model Y against dataset Z at time T; status; the
-   measurement mapping used."* This is **orchestration provenance** and lives in the **Platform DB**.
-   GraFlex structurally cannot hold it: GraFlex has no concept of the platform's users, its
-   registered components, or its dataset ids — and, crucially, **some executions never reach
-   GraFlex at all** (an invalid mapping rejected with `400`, or GraFlex being unreachable). Those
-   still need an execution row; only the platform can provide it.
-2. **The prediction output + the reproducible run** — the predicted values, plus the config / metrics
-   / trained model that produced them. GraFlex **owns this** (it is the system that computed it, and
-   its own pipeline needs the run record for reproducibility and re-analysis).
-
-**How they link — reference, don't duplicate.** GraFlex keeps a `run_id → result` mapping in its own
-store. The Platform DB's `executions` table carries a **`graflex_run_id`** column that references
-that run. This is a **logical reference resolved over HTTP** (e.g. `GET /runs/{run_id}`), **not** a
-SQL foreign key — the two databases cannot join, and nothing enforces integrity across them.
-
-Two rules make this correct:
-
-- **`graflex_run_id` is nullable.** It is populated when GraFlex actually ran, and null for
-  executions that failed before reaching GraFlex. (This is the second reason the execution record
-  must live in the platform.)
-- **The platform also caches the result on the execution, for display.** The `graflex_run_id`
-  pointer is the source-of-truth link (for audit / regenerate); a **cached copy** of the result on
-  the execution row is what the UI shows — so displaying a past execution does not depend on GraFlex
-  being up, and does not re-query GraFlex on every view. The cached result is safe to keep because a
-  completed prediction is **immutable** (the same immutable-snapshot caching the platform already
-  uses for fetched-dataset analysis). If GraFlex produces a new run, that is a **new execution** —
-  the old cached result is never mutated in place.
-
-Resulting `executions` shape (platform side):
-
-```
-id                (platform UUID — the platform's own execution id)
-user_id, component_id, dataset_id, measurement_mapping
-status, created_at, finished_at, error_message
-graflex_run_id    (nullable — reference to GraFlex's run; null if it never reached GraFlex)
-result            (nullable — cached copy of GraFlex's output, for display)
-```
-
-> **Open question for GraFlex (see §10):** for a *prediction* call, what stable id does GraFlex
-> return — a per-prediction `run_id`, or just the underlying trained-model/run id? GraFlex already
-> persists *training* runs; whether an inference call is also persisted-and-addressable determines
-> exactly what `graflex_run_id` points at (and, if prediction is stateless, the platform's cached
-> `result` becomes the only stored copy of that specific prediction — which is acceptable).
+> **Out of scope here:** a related consequence of this boundary — *where a prediction's result is
+> stored* (platform vs. GraFlex, and whether the platform keeps a copy) — concerns the prediction /
+> execution flow, not upload & cleaning. It is captured separately in
+> [`notes-execution-result-storage.md`](./notes-execution-result-storage.md).
 
 ---
 
@@ -491,20 +436,19 @@ out-of-range counts, missingness per column). Shape mirrors GraFlex's `EdaReport
 3. **How much of GraFlex's later pipeline** (features, splitting, topology, training) do we expose
    to the user for the thesis MVP, versus running with sensible defaults behind the scenes?
 4. **Endpoint ownership & timeline** — agreeing the §9 list and who builds what, when.
-5. **What id does a prediction return?** GraFlex persists *training* runs today; does a *prediction*
-   call also get a stable, addressable `run_id` (per-prediction), or does it only expose the
-   underlying trained-model/run id? This determines what the platform's `graflex_run_id` references
-   (see §7). If prediction is stateless, the platform's cached result is the only stored copy of that
-   specific prediction — acceptable, but should be a conscious decision.
-6. **Partial-import success policy.** The atomic `POST /datasets` (§9.1) rolls back on a *structural
+5. **Partial-import success policy.** The atomic `POST /datasets` (§9.1) rolls back on a *structural
    refusal* (a required column is missing). But when *some rows* fail type coercion while most are
    fine, do we **commit the good rows and report the bad ones** (recommended — cleaning handles the
    rest), or **roll back the whole upload** on any row error, or apply a **threshold** (commit if the
    error rate is below X%)? This is a policy choice for the atomic endpoint, to agree with Lyudmil.
-7. **Can a dataset accumulate data from multiple uploads?** The MVP treats one upload as one dataset,
+6. **Can a dataset accumulate data from multiple uploads?** The MVP treats one upload as one dataset,
    so the contract exposes only the atomic `POST /datasets`. If a dataset should instead grow over
    time (e.g. upload January, then February, into the same entity), a standalone "import into an
    existing entity" endpoint is needed — deferred, and purely additive if it turns out to be wanted.
+
+> Note: questions about **where a prediction's result is stored** (platform vs. GraFlex, and whether
+> the platform keeps a copy) are out of scope here — see
+> [`notes-execution-result-storage.md`](./notes-execution-result-storage.md).
 
 ---
 
