@@ -142,6 +142,10 @@ does (with an error report). No half-created dataset is possible.
 >
 > Either way the platform shows the **import report** (rows read/written, violations, refusal
 > reason) in the UI, and only records its own dataset metadata when the call succeeds.
+>
+> After a successful import the UI also shows **a few sample rows** (≈10, via §9.6) so the user can
+> confirm at a glance that the column mapping landed correctly — the one check the aggregate import
+> report and EDA cannot make (a wrong-column mapping can still produce plausible statistics).
 
 ---
 
@@ -233,8 +237,7 @@ The plan assumes GraFlex **supersedes** the current `data-analysis-service`. Rec
 
 GraFlex currently has no HTTP layer. This plan needs the following endpoints, each a thin wrapper
 over a GraFlex function that **already exists** (named in the "GraFlex function" column). This
-section is the **contract** between the two workstreams: once agreed, Lyudmil can build the
-endpoints while the platform side builds the UI and translation logic in parallel.
+section is the **contract** between the two workstreams.
 
 | # | Endpoint | GraFlex function | Used by |
 |---|---|---|---|
@@ -242,13 +245,9 @@ endpoints while the platform side builds the UI and translation logic in paralle
 | 2 | `GET /cleaning-steps` | *(new — enumerate registered steps + param schema)* | Cleaning step 2 |
 | 3 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 3 |
 | 4 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality view, before/after cleaning (§6) |
-| 5 | `GET /entities/{entity}/versions` | `list_versions` | Show data in UI |
-| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Show data in UI |
+| 5 | `GET /entities/{entity}/versions` | `list_versions` | Which versions exist (drives the UI) |
+| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Small row sample — import sanity check |
 
-> Two endpoints are genuinely **new** work: the atomic `POST /datasets` (#1) needs a thin
-> transactional wrapper around GraFlex's existing `save_entity_schema` + `import_csv_text` so the
-> two commit or roll back together (see §5 step 5); and `GET /cleaning-steps` (#2) enumerates the
-> registered cleaning steps. Everything else wraps a function that already exists.
 >
 > **Ingestion is deliberately a single endpoint.** There is no standalone "save a schema" or
 > "import into an existing entity" in the contract: the MVP treats one upload as one dataset, so the
@@ -404,14 +403,20 @@ feedback that replaced the old row-count preview (see §6, "The data-quality vie
 **Response** — a read-only report (never persisted) the quality view renders (e.g. sentinel counts,
 out-of-range counts, missingness per column). Shape mirrors GraFlex's `EdaReport` sections.
 
-### 9.5 / 9.6 — list and read stored versions
+### 9.5 / 9.6 — list versions, and read a small sample
 
-`GET /entities/{entity}/versions` →
+`GET /entities/{entity}/versions` — **which versions exist and how big each is** (drives the UI:
+raw only? cleaned too?):
 ```json
 { "versions": [ { "version": "raw", "rows": 8742 }, { "version": "cleaned", "rows": 8742 } ] }
 ```
 
-`GET /entities/{entity}/versions/{version}?limit=100` → a page of rows (JSON records) for display.
+`GET /entities/{entity}/versions/{version}?limit=10` — **a small sample of rows** (JSON records), for
+an **import sanity check** — the user glances at ~10 real rows to confirm the column mapping landed
+correctly (e.g. `pm2_5` really holds PM2.5, not the timestamp). This is *not* a data-browsing table:
+understanding data quality is the job of the EDA view (§9.4), which EDA does far better than a row
+dump. Row display exists only for the one thing EDA cannot do — catch a wrong-column mapping whose
+statistics still look plausible.
 
 ### Cross-cutting notes for the contract
 
