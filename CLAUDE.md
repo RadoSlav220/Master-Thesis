@@ -50,6 +50,18 @@ scope note below.
 
 - **Orchestration boundary** — data processing (structure analysis, station extraction) is
   delegated to the Python service; the backend never does it itself. Preserve this separation.
+- **`data-analysis-service` → graflex (planned direction; 2026-09-26)** — the current
+  `data-analysis-service` (a Pandas structure/extraction stub) is slated to be **superseded by
+  graflex**, a separate, self-contained data platform (a sibling repo, not in this tree) that runs
+  the full pipeline — schema → import CSV → EDA → clean → features → split → topology → train — with
+  its own Postgres. **Do not build new work on `data-analysis-service`.** This is
+  **supersede-then-delete**, not replace-now: `data-analysis-service` stays the working path until
+  graflex grows an HTTP API (it currently has none — notebook-driven today) and the flow is
+  re-pointed and verified. Integration shape: **two databases** — the platform DB (Spring/Hibernate)
+  and graflex's own DB — with Spring reaching graflex **over HTTP only, never by direct SQL** (to
+  avoid coupling to graflex's dynamically-named per-entity tables). This aligns with the supervisor's
+  meeting insights: the Python service must run standalone with DB access, and each dataset's data
+  lives in its own table with write access — both of which graflex already satisfies natively.
 - **Backend → Python HTTP client** — Spring `RestClient` **pinned to HTTP/1.1**
   (`JdkClientHttpRequestFactory` with `HttpClient.Version.HTTP_1_1`). The JDK client's
   default HTTP/2 upgrade corrupts multipart requests to uvicorn (422 / "invalid HTTP

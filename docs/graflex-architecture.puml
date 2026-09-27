@@ -1,0 +1,42 @@
+@startuml graflex-architecture
+title Local Digital Twin — Component Architecture
+
+' --- global look ---
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 60
+skinparam ranksep 55
+skinparam defaultTextAlignment center
+skinparam ArrowColor #444444
+skinparam ArrowFontColor #333333
+skinparam rectangle {
+  BackgroundColor #FDFDFD
+  BorderColor #666666
+  RoundCorner 8
+}
+skinparam database {
+  BackgroundColor #F4F8FF
+  BorderColor #4A6FA5
+}
+skinparam actorStyle awesome
+
+actor User
+
+rectangle "**React Frontend**\n--\nUpload wizard\nColumn mapping\nCleaning dialog" as FE
+rectangle "**Spring Boot Backend**\n//(orchestration layer)//\n--\nAuthors GraFlex schemas\nDrives GraFlex (incl. predictions)\nOwns users / executions / metadata" as BE
+rectangle "**GraFlex**\n//data + modelling platform//\n--\nschema -> import -> EDA -> clean -> features -> ...\n**TRAINS + RUNS prediction models**" as GFX
+
+database "**Platform DB**\n//(PostgreSQL)//\n--\nusers\ncomponents\nexecutions\ndataset metadata\n(-> graflex entity+version)" as PDB
+database "**GraFlex DB**\n//(PostgreSQL)//\n--\nentity schemas + configs\n<entity>__raw / __cleaned / __features\ntrained models / runs" as GDB
+
+' --- vertical spine (keeps everything centered) ---
+User --> FE
+FE --> BE : HTTP / REST + JSON
+BE --> PDB : JDBC / SQL\n(Hibernate)
+BE --> GFX : HTTP + JSON / multipart\n(save schema, import,\npreview/clean, read, predict)
+GFX --> GDB : JDBC / SQL\n(SQLAlchemy)
+
+' --- keep the two DBs on the same rank, side by side ---
+PDB -[hidden]right- GFX
+
+@enduml
