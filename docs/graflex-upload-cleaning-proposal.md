@@ -162,7 +162,7 @@ bounded set: tens to
 hundreds of stations) and builds the map's GeoJSON `FeatureCollection` from those rows; GraFlex just
 returns the station table. Stations without coordinates are simply not plotted. (The station map
 answers *"where are the stations, and what are they?"*; the EDA view answers *"how good is the
-data?"* — the two are complementary, not alternatives.) 
+data?"* — the two are complementary, not alternatives.)
 
 ---
 
