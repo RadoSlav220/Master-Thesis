@@ -63,7 +63,7 @@ in §7.
 |---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **React Frontend** | The only thing the user touches. Owns the upload wizard, the column-role mapping UI, and the cleaning dialog. Holds *no* analytical or storage logic — it just calls the backend.                                                                                                                                                                                                                                                                      |
 | **Spring Boot Backend** | The **orchestration layer**. It coordinates everything but analyses nothing itself: it authors GraFlex schemas from the user's column mapping, drives GraFlex over HTTP (including asking it to run a prediction), and records what happened.                                                                                                                                                                                                          |
-| **Platform DB** (PostgreSQL) | The backend's own store: users (later), registered components, execution records, and **dataset metadata** — including a pointer to the corresponding GraFlex entity + version. It does **not** hold the dataset rows themselves.                                                                                                                                                                                                                      |
+| **Platform DB** (PostgreSQL) | The backend's own store: users (later), registered components, execution records, and **dataset metadata** — including a pointer to the corresponding GraFlex entity + version **and the column-role mapping the user authored at upload** (see §5, Step 3b). It does **not** hold the dataset rows themselves.                                                                                                                                                                                                                      |
 | **GraFlex** | The **data platform *and* the model host** — does the actual data work (import, cleaning, features) **and trains + runs the prediction models** (the graph and baseline forecasters that produce the temporal / spatial / spatio-temporal predictions). It is a separate, self-contained system that already runs standalone against its own database, satisfying the requirement that the data component work independently of the Spring/React apps. |
 | **GraFlex DB** (PostgreSQL) | GraFlex's own store: entity schemas, saved configs (cleaning recipes, etc.), the actual dataset rows in per-entity `raw` / `cleaned` / `features` tables, and the trained-model / run records. Only GraFlex connects to it.                                                                                                                                                                                                                            | |
 
@@ -110,6 +110,12 @@ The user may **optionally** also set, per measurement column:
 > like `-999` rather than an empty cell. If we don't declare that, downstream cleaning and models
 > treat `-999` as a real reading and corrupt every average. GraFlex's cleaning can convert declared
 > sentinels to true nulls — but only if we tell it which values are sentinels.
+
+### Step 3b — The platform records the mapping configuration in its own database
+Before anything is sent to GraFlex, the platform **persists the column-role mapping the user just
+authored** (the role per column, plus any optional per-column data type, valid range, and
+missing-value sentinels) as part of its own **dataset metadata**, alongside the pointer to the
+GraFlex entity + version it is about to create.
 
 ### Step 4 — The platform builds **two** GraFlex schemas
 A single upload becomes **two** GraFlex entity schemas, because GraFlex (sensibly) separates a
@@ -163,7 +169,7 @@ data?"* — the two are complementary, not alternatives.)
 ## 6. Proposed flow — Data Cleaning
 
 A dedicated **Cleaning** area lets the user turn raw imported data into a cleaned version. The
-cleaning *action* is three steps (below); alongside it runs a **data-quality view** that the user
+cleaning *action* is four steps (below); alongside it runs a **data-quality view** that the user
 consults *both before and after* — described after the steps, because it is not a step in the
 sequence but a view referenced around them.
 
@@ -180,7 +186,34 @@ missing values* (median / forward-fill / constant), *enforce valid ranges* (clip
 > so the dialog can be **built dynamically** from what GraFlex actually supports, rather than the
 > frontend hardcoding each step's form.
 
-### Step 3 — Commit: GraFlex writes the cleaned version; the cleaning recipe is saved
+### Step 3 — Preview: see the result *before* committing, and adjust
+Before the cleaned version is written to the database, the user can **preview** what the chosen
+steps would do. GraFlex runs the step list against the raw data **in memory and writes nothing**,
+returning the resulting rows (a bounded sample) and a per-step record of what each step changed —
+rows and columns in and out. The user inspects this, **goes back to Step 2 to add, remove, reorder,
+or re-tune steps**, and previews again — iterating until the recipe looks right. Nothing is
+persisted during this loop.
+
+> **Why a preview before commit?** Cleaning is a judgement call, not a deterministic transform: the
+> right fill strategy or outlier bound depends on what the data actually looks like, and the user
+> cannot know in advance whether "clip to [0, 500]" nulls three values or thirty thousand. Letting
+> the user *see the effect and correct the steps* before writing avoids committing a bad recipe and
+> then having to notice, diagnose, and redo it against the stored cleaned version. It turns cleaning
+> from "commit and check" into "check, adjust, then commit".
+>
+> **This needs no new GraFlex capability** — GraFlex's cleaning service already exposes a
+> dry-run that applies a config to a frame in memory and returns the result plus the per-step
+> record *without writing a row* (its notebook "try a config before committing to it" affordance).
+> The preview endpoint (§9) is a thin wrapper over exactly that.
+>
+> **Preview vs. the data-quality view.** They answer different questions and are complementary. The
+> preview shows *what these specific steps would produce* (the transformed rows + per-step deltas),
+> so the user can tune the recipe. The data-quality view (below) shows *how good a stored version
+> is* (sentinels, out-of-range, gaps). The preview reads nothing from storage and writes nothing;
+> the quality view reads a committed version. A user typically consults the *before* quality view to
+> choose steps, previews to tune them, commits, then consults the *after* quality view to confirm.
+
+### Step 4 — Commit: GraFlex writes the cleaned version; the cleaning recipe is saved
 On commit, GraFlex applies the steps, writes the cleaned version, and **saves the cleaning recipe**
 (the ordered list of steps) as a reusable, versioned config.
 
@@ -255,10 +288,17 @@ section is the **contract** between the two workstreams.
 |---|---|---|---|
 | 1 | `POST /datasets` *(atomic: schema(s) + import in one transaction)* | *(new — wraps `save_entity_schema` + `import_csv_text` in one DB transaction)* | **Upload** |
 | 2 | `GET /cleaning-steps` | *(new — enumerate registered steps + param schema)* | Cleaning step 2 |
-| 3 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 3 |
-| 4 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality view, before/after cleaning (§6) |
-| 5 | `GET /entities/{entity}/versions` | `list_versions` | Which versions exist (drives the UI) |
-| 6 | `GET /entities/{entity}/versions/{version}` | `read_version` | Station rows (map) + measurement sample (mapping check) |
+| 3 | `POST /entities/{entity}/clean/preview` | `preview_clean` | Cleaning step 3 (preview before commit) |
+| 4 | `POST /entities/{entity}/clean` | `save_cleaning_config` + `clean` | Cleaning step 4 (commit) |
+| 5 | `POST /entities/{entity}/eda` | `run_eda` | Data-quality view, before/after cleaning (§6) |
+| 6 | `GET /entities/{entity}/versions` | `list_versions` | Which versions exist (drives the UI) |
+| 7 | `GET /entities/{entity}/versions/{version}` | `read_version` | Station rows (map) + measurement sample (mapping check) |
+
+> **The preview endpoint writes nothing.** `POST …/clean/preview` wraps GraFlex's in-memory
+> dry-run (`preview_clean`): it applies the step list to the raw frame and returns the transformed
+> sample + per-step record **without creating or touching any `__cleaned` table**. Only
+> `POST …/clean` (commit) writes. This keeps the preview/adjust loop (§6, Step 3) free of
+> side effects — a user can preview a dozen variants and GraFlex's storage is untouched until commit.
 
 > **Ingestion is deliberately a single endpoint.** There is no standalone "save a schema" or
 > "import into an existing entity" in the contract: the MVP treats one upload as one dataset, so the
