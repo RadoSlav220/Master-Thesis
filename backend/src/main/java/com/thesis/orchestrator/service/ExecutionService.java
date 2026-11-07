@@ -6,6 +6,7 @@ import com.thesis.orchestrator.domain.Component;
 import com.thesis.orchestrator.domain.Dataset;
 import com.thesis.orchestrator.domain.Execution;
 import com.thesis.orchestrator.domain.ExecutionStatus;
+import com.thesis.orchestrator.dto.DatasetProvenance;
 import com.thesis.orchestrator.dto.ExecutionDownload;
 import com.thesis.orchestrator.dto.ExecutionRequest;
 import com.thesis.orchestrator.dto.ExecutionResponse;
@@ -38,12 +39,12 @@ public class ExecutionService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Executes a registered component against a dataset. For a station-based (relational)
-     * dataset the component's expected measurements are mapped onto the dataset's measurement
-     * columns and a GeoJSON FeatureCollection is synthesized; for a content-based GeoJSON
-     * dataset the stored content is passed through as-is. The execution is persisted as
-     * RUNNING, the component is invoked synchronously, and the record is updated to COMPLETED
-     * or FAILED. A failed invocation is still a valid, stored outcome.
+     * Executes a registered component against a dataset. All datasets are station-based
+     * (relational, stored in GraFlex): the component's expected measurements are mapped onto
+     * the dataset's measurement columns and a GeoJSON FeatureCollection is synthesized. The
+     * execution is persisted as RUNNING, the component is invoked synchronously, and the
+     * record is updated to COMPLETED or FAILED. A failed invocation is still a valid, stored
+     * outcome.
      */
     @Transactional
     public ExecutionResponse create(ExecutionRequest request) {
@@ -61,21 +62,16 @@ public class ExecutionService {
         executionRepository.save(execution);
 
         try {
-            JsonNode geoJson;
-            boolean stationBased = dataset.getContent() == null || dataset.getContent().isBlank();
-            if (stationBased) {
-                // Station-based (relational) dataset: map the component's expected
-                // measurements onto the dataset's measurement columns, then synthesize a
-                // GeoJSON FeatureCollection (per-station time series in feature properties).
-                Map<String, String> mapping = validateMeasurementMapping(
-                        dataset.getId(), component, request.measurementMapping());
-                persistMeasurementMapping(execution, mapping);
-                geoJson = stationGeoJsonBuilder.build(dataset.getId(), mapping);
-            } else {
-                String geoJsonContent =
-                        "GEOJSON".equalsIgnoreCase(dataset.getType()) ? dataset.getContent() : null;
-                geoJson = parseGeoJson(geoJsonContent);
-            }
+            // All datasets are station-based (relational, stored in GraFlex): map the
+            // component's expected measurements onto the dataset's measurement columns, then
+            // synthesize a GeoJSON FeatureCollection (per-station time series in feature
+            // properties). The rows are read from GraFlex via the dataset's entity pointers.
+            DatasetProvenance.UploadProvenance provenance = graflexProvenance(dataset);
+            Map<String, String> mapping = validateMeasurementMapping(
+                    provenance.graflexMeasurementEntity(), component, request.measurementMapping());
+            persistMeasurementMapping(execution, mapping);
+            JsonNode geoJson = stationGeoJsonBuilder.build(
+                    provenance.graflexStationEntity(), provenance.graflexMeasurementEntity(), mapping);
             String result = componentClient.invoke(component.getEndpointUrl(), request.datasetId(), geoJson);
             execution.setResult(result);
             execution.setStatus(ExecutionStatus.COMPLETED);
@@ -96,13 +92,13 @@ public class ExecutionService {
      * restricted to the component's expected measurements.
      */
     private Map<String, String> validateMeasurementMapping(
-            UUID datasetId, Component component, Map<String, String> requested) {
+            String measurementEntity, Component component, Map<String, String> requested) {
         List<String> expected = component.getExpectedMeasurements();
         if (expected == null || expected.isEmpty()) {
             return Map.of();
         }
         Map<String, String> mapping = requested == null ? Map.of() : requested;
-        Set<String> availableTypes = stationGeoJsonBuilder.distinctMeasurementTypes(datasetId);
+        Set<String> availableTypes = stationGeoJsonBuilder.distinctMeasurementTypes(measurementEntity);
 
         List<String> unmapped = expected.stream()
                 .filter(name -> {
@@ -131,16 +127,27 @@ public class ExecutionService {
         }
     }
 
-    private JsonNode parseGeoJson(String content) {
-        if (content == null || content.isBlank()) {
-            return null;
+    /**
+     * Resolves a station-based dataset's GraFlex entity pointers from its stored
+     * {@link DatasetProvenance.UploadProvenance}. A 400 is raised (blocking the run) when the
+     * dataset has no GraFlex pointer — such a dataset cannot supply rows to a component.
+     */
+    private DatasetProvenance.UploadProvenance graflexProvenance(Dataset dataset) {
+        String raw = dataset.getProvenance();
+        if (raw != null && !raw.isBlank()) {
+            try {
+                DatasetProvenance provenance = objectMapper.readValue(raw, DatasetProvenance.class);
+                if (provenance instanceof DatasetProvenance.UploadProvenance upload
+                        && upload.graflexStationEntity() != null
+                        && upload.graflexMeasurementEntity() != null) {
+                    return upload;
+                }
+            } catch (Exception ignored) {
+                // fall through to the invalid-execution below
+            }
         }
-        try {
-            return objectMapper.readTree(content);
-        } catch (Exception ex) {
-            // Stored content failed to parse; send no geometry rather than failing hard.
-            return null;
-        }
+        throw new InvalidExecutionException(
+                "Dataset is not a GraFlex-backed station upload and cannot be executed: " + dataset.getId());
     }
 
     public List<ExecutionResponse> getAll() {

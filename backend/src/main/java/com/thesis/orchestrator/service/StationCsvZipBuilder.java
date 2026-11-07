@@ -1,12 +1,9 @@
 package com.thesis.orchestrator.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thesis.orchestrator.domain.Measurement;
-import com.thesis.orchestrator.domain.Station;
+import com.thesis.orchestrator.dto.GraFlexMeasurement;
+import com.thesis.orchestrator.dto.GraFlexStation;
 import com.thesis.orchestrator.exception.DatasetAnalysisException;
-import com.thesis.orchestrator.repository.MeasurementRepository;
-import com.thesis.orchestrator.repository.StationRepository;
+import com.thesis.orchestrator.integration.GraFlexClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,13 +14,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Reconstructs a station-based dataset (relational {@code stations} + {@code measurements})
- * as a zip of two CSVs for download.
+ * Reconstructs a station-based dataset as a zip of two CSVs for download. The station and
+ * measurement rows are read from GraFlex over HTTP (via the dataset's entity pointers), not
+ * from the platform database.
  *
  * <p>The CSV headers mirror the station-upload role names so the archive round-trips:
  * unzipping and re-uploading the two files through Create Dataset reproduces the dataset
@@ -42,14 +39,12 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 public class StationCsvZipBuilder {
 
-    private final StationRepository stationRepository;
-    private final MeasurementRepository measurementRepository;
-    private final ObjectMapper objectMapper;
+    private final GraFlexClient graFlexClient;
 
     /** Builds the {@code stations.csv} + {@code measurements.csv} archive for a dataset. */
-    public byte[] build(UUID datasetId) {
-        List<Station> stations = stationRepository.findByDatasetId(datasetId);
-        List<Measurement> measurements = measurementRepository.findAllByDatasetId(datasetId);
+    public byte[] build(String stationEntity, String measurementEntity) {
+        List<GraFlexStation> stations = graFlexClient.readStations(stationEntity, null);
+        List<GraFlexMeasurement> measurements = graFlexClient.readMeasurements(measurementEntity, null);
 
         byte[] stationsCsv = buildStationsCsv(stations);
         byte[] measurementsCsv = buildMeasurementsCsv(measurements);
@@ -68,11 +63,13 @@ public class StationCsvZipBuilder {
         return out.toByteArray();
     }
 
-    private byte[] buildStationsCsv(List<Station> stations) {
+    private byte[] buildStationsCsv(List<GraFlexStation> stations) {
         // Sorted union of attribute keys across all stations, for stable columns.
         TreeSet<String> attrKeys = new TreeSet<>();
-        for (Station station : stations) {
-            attrKeys.addAll(parseAttributes(station.getAttributes()).keySet());
+        for (GraFlexStation station : stations) {
+            if (station.attributes() != null) {
+                attrKeys.addAll(station.attributes().keySet());
+            }
         }
 
         StringBuilder sb = new StringBuilder();
@@ -80,12 +77,12 @@ public class StationCsvZipBuilder {
         header.addAll(attrKeys);
         writeRow(sb, header);
 
-        for (Station station : stations) {
-            Map<String, String> attrs = parseAttributes(station.getAttributes());
+        for (GraFlexStation station : stations) {
+            Map<String, String> attrs = station.attributes() == null ? Map.of() : station.attributes();
             List<String> row = new java.util.ArrayList<>();
-            row.add(station.getStationExternalId());
-            row.add(station.getLatitude() == null ? "" : String.valueOf(station.getLatitude()));
-            row.add(station.getLongitude() == null ? "" : String.valueOf(station.getLongitude()));
+            row.add(station.stationExternalId());
+            row.add(station.latitude() == null ? "" : String.valueOf(station.latitude()));
+            row.add(station.longitude() == null ? "" : String.valueOf(station.longitude()));
             for (String key : attrKeys) {
                 row.add(attrs.getOrDefault(key, ""));
             }
@@ -94,16 +91,16 @@ public class StationCsvZipBuilder {
         return sb.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private byte[] buildMeasurementsCsv(List<Measurement> measurements) {
+    private byte[] buildMeasurementsCsv(List<GraFlexMeasurement> measurements) {
         // Sorted distinct measurement types -> wide columns.
         TreeSet<String> types = new TreeSet<>();
         // (stationId, timestamp) -> (type -> value); last write wins on a collision.
         Map<String, Map<String, String>> rows = new java.util.LinkedHashMap<>();
-        for (Measurement m : measurements) {
-            types.add(m.getMeasurementType());
-            String ts = m.getTimestamp() == null ? "" : m.getTimestamp().toString();
-            String key = m.getStationExternalId() + "\u0000" + ts;
-            rows.computeIfAbsent(key, k -> new TreeMap<>()).put(m.getMeasurementType(), m.getValue());
+        for (GraFlexMeasurement m : measurements) {
+            types.add(m.measurementType());
+            String ts = m.timestamp() == null ? "" : m.timestamp();
+            String key = m.stationExternalId() + "\u0000" + ts;
+            rows.computeIfAbsent(key, k -> new TreeMap<>()).put(m.measurementType(), m.value());
         }
 
         StringBuilder sb = new StringBuilder();
@@ -125,17 +122,6 @@ public class StationCsvZipBuilder {
             writeRow(sb, row);
         }
         return sb.toString().getBytes(StandardCharsets.UTF_8);
-    }
-
-    private Map<String, String> parseAttributes(String json) {
-        if (json == null || json.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
-        } catch (IOException ex) {
-            return Map.of();
-        }
     }
 
     /** Writes one CSV row (RFC-4180 minimal escaping) plus a trailing newline. */

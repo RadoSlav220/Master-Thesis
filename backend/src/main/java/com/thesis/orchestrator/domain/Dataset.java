@@ -38,23 +38,7 @@ public class Dataset {
     @Column(columnDefinition = "text")
     private String description;
 
-    /** Raw dataset content — CSV text. */
-    @Column(columnDefinition = "text")
-    private String content;
-
-    /** Persisted structure analysis (JSON string from the analysis service). */
-    @Column(columnDefinition = "text")
-    private String analysisResult;
-
-    /** Dataset type as reported by analysis, e.g. CSV. */
-    @Column
-    private String datasetType;
-
-    /** The data source this dataset was fetched from, if any (provenance). */
-    @Column
-    private UUID sourceId;
-
-    /** Where this dataset came from (UPLOAD, API, DATABASE); drives the provenance shape. */
+    /** Where this dataset came from; drives the provenance shape. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DatasetOrigin datasetOrigin;

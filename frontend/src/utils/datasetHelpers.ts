@@ -1,22 +1,17 @@
 import type { Dataset } from "../types";
 
 /**
- * A station-based dataset stores its data relationally (stations + measurements) rather
- * than in a single content blob: it originates from an UPLOAD, has no stored content, and
- * carries no persisted structure analysis (only content-based uploads run /analyze).
+ * Every dataset is station-based: it originates from an UPLOAD and stores its data
+ * relationally in GraFlex (stations + measurements), read back over HTTP.
  */
-export function isStationDataset(dataset: Pick<Dataset, "datasetOrigin" | "hasContent" | "analysisResult">): boolean {
-  return (
-    dataset.datasetOrigin === "UPLOAD" && !dataset.hasContent && !dataset.analysisResult
-  );
+export function isStationDataset(dataset: Pick<Dataset, "datasetOrigin">): boolean {
+  return dataset.datasetOrigin === "UPLOAD";
 }
 
 /**
- * A dataset is downloadable when it has raw CSV content (single file) or is a
- * station-based dataset (reconstructed as a zip of stations.csv + measurements.csv).
+ * A station-based dataset is downloadable as a zip of stations.csv + measurements.csv
+ * (reconstructed from GraFlex).
  */
-export function isDownloadable(
-  dataset: Pick<Dataset, "hasContent" | "datasetOrigin" | "analysisResult">,
-): boolean {
-  return dataset.hasContent || isStationDataset(dataset);
+export function isDownloadable(dataset: Pick<Dataset, "datasetOrigin">): boolean {
+  return isStationDataset(dataset);
 }

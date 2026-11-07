@@ -265,6 +265,13 @@ GraFlex's database.
 
 ## 8. Relationship to the current `data-analysis-service`
 
+> **Status (2026-10-25): done.** GraFlex grew the HTTP API (upload slice), the station-upload
+> flow was re-pointed to it, and `data-analysis-service` has been **deleted**. The retirement
+> also removed the now-defunct `/datasets/upload` and `/datasets/{id}/analyze` endpoints.
+> One deviation from the plan below: reshaping moved **into GraFlex** (`POST /datasets/station-upload`
+> takes raw CSVs + the role mapping) rather than the platform pre-shaping two CSVs — see the
+> banner in [`graflex-integration-checklist.md`](./graflex-integration-checklist.md).
+
 The plan assumes GraFlex **supersedes** the current `data-analysis-service`. Recommended sequencing:
 
 1. GraFlex grows the HTTP API this plan needs (see §9). `data-analysis-service` keeps working

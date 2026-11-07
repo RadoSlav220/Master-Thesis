@@ -6,9 +6,5 @@ package com.thesis.orchestrator.domain;
  */
 public enum DatasetOrigin {
     /** Manually uploaded file. */
-    UPLOAD,
-    /** Fetched from a data source's HTTP API. */
-    API,
-    /** Produced by a database query (reserved for later). */
-    DATABASE
+    UPLOAD
 }
