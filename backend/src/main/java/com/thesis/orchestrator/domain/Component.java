@@ -50,8 +50,7 @@ public class Component {
     /**
      * The measurement inputs this component expects. At execution time the caller maps
      * the dataset's measurement columns onto these names; every expected measurement
-     * must be mapped (see the execution flow). Stored relationally, mirroring
-     * {@code DataSource.queryParameters}.
+     * must be mapped (see the execution flow). Stored relationally.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(

@@ -15,10 +15,6 @@ public record DatasetResponse(
         String name,
         String type,
         String description,
-        boolean hasContent,
-        String datasetType,
-        String analysisResult,
-        UUID sourceId,
         DatasetOrigin datasetOrigin,
         DatasetProvenance provenance,
         Instant createdAt
@@ -26,17 +22,11 @@ public record DatasetResponse(
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static DatasetResponse from(Dataset dataset) {
-        String content = dataset.getContent();
-        boolean hasContent = content != null && !content.isBlank();
         return new DatasetResponse(
                 dataset.getId(),
                 dataset.getName(),
                 dataset.getType(),
                 dataset.getDescription(),
-                hasContent,
-                dataset.getDatasetType(),
-                dataset.getAnalysisResult(),
-                dataset.getSourceId(),
                 dataset.getDatasetOrigin(),
                 parseProvenance(dataset.getProvenance()),
                 dataset.getCreatedAt()

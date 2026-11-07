@@ -1,6 +1,5 @@
 package com.thesis.orchestrator.controller;
 
-import com.thesis.orchestrator.dto.DatasetAnalysisResponse;
 import com.thesis.orchestrator.dto.DatasetDownload;
 import com.thesis.orchestrator.dto.DatasetRequest;
 import com.thesis.orchestrator.dto.DatasetResponse;
@@ -42,15 +41,6 @@ public class DatasetController {
     @ResponseStatus(HttpStatus.CREATED)
     public DatasetResponse create(@Valid @RequestBody DatasetRequest request) {
         return datasetService.create(request);
-    }
-
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public DatasetResponse upload(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("name") String name,
-            @RequestParam(value = "description", required = false) String description) {
-        return datasetService.upload(file, name, description);
     }
 
     @PostMapping(value = "/upload-stations", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -99,11 +89,6 @@ public class DatasetController {
                         ContentDisposition.attachment().filename(download.filename()).build().toString())
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .body(download.content());
-    }
-
-    @PostMapping("/{id}/analyze")
-    public DatasetAnalysisResponse analyze(@PathVariable UUID id) {
-        return datasetService.analyze(id);
     }
 
     @DeleteMapping("/{id}")

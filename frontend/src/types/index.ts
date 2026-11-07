@@ -2,23 +2,16 @@ export type ExecutionStatus = "CREATED" | "RUNNING" | "COMPLETED" | "FAILED";
 
 export type DatasetType = "CSV";
 
-export type DatasetOrigin = "UPLOAD" | "API" | "DATABASE";
+export type DatasetOrigin = "UPLOAD";
 
 /** Origin-specific provenance, discriminated by `type` (mirrors the backend). */
-export type DatasetProvenance =
-  | { type: "API"; queryParameters: Record<string, string> | null }
-  | { type: "DATABASE" }
-  | { type: "UPLOAD" };
+export type DatasetProvenance = { type: "UPLOAD" };
 
 export interface Dataset {
   id: string;
   name: string;
   type: string;
   description: string | null;
-  hasContent: boolean;
-  datasetType: string | null;
-  analysisResult: string | null;
-  sourceId: string | null;
   datasetOrigin: DatasetOrigin;
   provenance: DatasetProvenance | null;
   createdAt: string;
@@ -77,11 +70,6 @@ export interface DatasetStats {
   measurementCount: number;
 }
 
-export interface FetchDatasetRequest {
-  name: string;
-  queryParameters?: Record<string, string>;
-}
-
 export interface Component {
   id: string;
   name: string;
@@ -109,45 +97,6 @@ export interface CreateExecutionRequest {
   componentId: string;
   /** Component expected-measurement name -> dataset measurement column. */
   measurementMapping?: Record<string, string>;
-}
-
-/** Structural analysis of a dataset returned by the analysis service (via backend). */
-export interface DatasetAnalysis {
-  datasetType: string;
-  columns?: string[];
-  properties?: string[];
-}
-
-export type DataSourceType = "API";
-
-export type DataSourceOutputFormat = "CSV";
-
-export interface QueryParameter {
-  name: string;
-  required: boolean;
-  defaultValue?: string | null;
-}
-
-export interface DataSource {
-  id: string;
-  name: string;
-  type: string;
-  outputFormat: string;
-  endpointUrl: string | null;
-  apiKey: string | null;
-  description: string | null;
-  queryParameters: QueryParameter[];
-  createdAt: string;
-}
-
-export interface CreateDataSourceRequest {
-  name: string;
-  type: DataSourceType;
-  outputFormat: DataSourceOutputFormat;
-  endpointUrl?: string;
-  apiKey?: string;
-  description?: string;
-  queryParameters?: QueryParameter[];
 }
 
 /** Minimal GeoJSON types (subset of the spec we render). */

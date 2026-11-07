@@ -1,7 +1,6 @@
 package com.thesis.orchestrator.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.thesis.orchestrator.domain.Station;
 
 import java.util.UUID;
 
@@ -14,13 +13,4 @@ public record StationResponse(
         Double longitude,
         String attributes
 ) {
-    public static StationResponse from(Station station) {
-        return new StationResponse(
-                station.getId(),
-                station.getStationExternalId(),
-                station.getLatitude(),
-                station.getLongitude(),
-                station.getAttributes()
-        );
-    }
 }

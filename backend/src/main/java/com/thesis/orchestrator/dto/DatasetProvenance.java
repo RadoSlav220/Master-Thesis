@@ -13,21 +13,29 @@ import java.util.Map;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = DatasetProvenance.ApiProvenance.class, name = "API"),
-        @JsonSubTypes.Type(value = DatasetProvenance.DatabaseProvenance.class, name = "DATABASE"),
         @JsonSubTypes.Type(value = DatasetProvenance.UploadProvenance.class, name = "UPLOAD")
 })
 public sealed interface DatasetProvenance {
 
-    /** Dataset fetched from a data source's HTTP API: the query-parameter values used. */
-    record ApiProvenance(Map<String, String> queryParameters) implements DatasetProvenance {
-    }
+    /**
+     * Manually uploaded, station-based dataset whose rows live in GraFlex. Records the
+     * user-authored column-role mapping (and any measurement renames) plus the pointer to
+     * the two GraFlex entities (+ versions) the upload created, so the platform can read
+     * the data back over HTTP without holding it itself. All fields are nullable: a
+     * plain (non-GraFlex) upload uses {@link #empty()}.
+     */
+    record UploadProvenance(
+            Map<String, Map<String, String>> mapping,
+            Map<String, Map<String, String>> renames,
+            String graflexStationEntity,
+            Integer graflexStationVersion,
+            String graflexMeasurementEntity,
+            Integer graflexMeasurementVersion,
+            String projectId) implements DatasetProvenance {
 
-    /** Dataset produced by a database query (reserved for later — fields TBD). */
-    record DatabaseProvenance() implements DatasetProvenance {
-    }
-
-    /** Manually uploaded dataset (no source-specific detail today). */
-    record UploadProvenance() implements DatasetProvenance {
+        /** An upload provenance carrying no detail (e.g. a plain CSV upload). */
+        public static UploadProvenance empty() {
+            return new UploadProvenance(null, null, null, null, null, null, null);
+        }
     }
 }

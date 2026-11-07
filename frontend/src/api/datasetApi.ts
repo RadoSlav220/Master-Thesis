@@ -2,7 +2,6 @@ import { apiClient } from "./client";
 import type {
   CreateDatasetRequest,
   Dataset,
-  DatasetAnalysis,
   DatasetStats,
   Measurement,
   Station,
@@ -22,16 +21,6 @@ export const datasetApi = {
   },
   create: async (payload: CreateDatasetRequest): Promise<Dataset> => {
     const { data } = await apiClient.post<Dataset>("/datasets", payload);
-    return data;
-  },
-  upload: async (file: File, name: string, description?: string): Promise<Dataset> => {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("name", name);
-    if (description) form.append("description", description);
-    const { data } = await apiClient.post<Dataset>("/datasets/upload", form, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
     return data;
   },
   uploadStations: async (
@@ -74,10 +63,6 @@ export const datasetApi = {
     const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^"';]+)"?/i);
     const filename = match ? decodeURIComponent(match[1]) : `dataset-${id}`;
     return { blob: response.data as Blob, filename };
-  },
-  analyze: async (id: string): Promise<DatasetAnalysis> => {
-    const { data } = await apiClient.post<DatasetAnalysis>(`/datasets/${id}/analyze`);
-    return data;
   },
   update: async (id: string, payload: UpdateDatasetRequest): Promise<Dataset> => {
     const { data } = await apiClient.put<Dataset>(`/datasets/${id}`, payload);

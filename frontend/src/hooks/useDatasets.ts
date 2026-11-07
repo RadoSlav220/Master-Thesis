@@ -29,15 +29,6 @@ export function useCreateDataset() {
   });
 }
 
-export function useUploadDataset() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { file: File; name: string; description?: string }) =>
-      datasetApi.upload(vars.file, vars.name, vars.description),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
-  });
-}
-
 export function useUploadStations() {
   const qc = useQueryClient();
   return useMutation({
@@ -80,12 +71,6 @@ export function useDatasetStats(id: string | null) {
     queryKey: [...KEY, id, "stats"],
     queryFn: () => datasetApi.getStats(id as string),
     enabled: !!id,
-  });
-}
-
-export function useAnalyzeDataset() {
-  return useMutation({
-    mutationFn: (id: string) => datasetApi.analyze(id),
   });
 }
 

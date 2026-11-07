@@ -1,5 +1,14 @@
 # Data Cleaning Tooling: OpenRefine vs. Config-Driven Python Pipeline
 
+> **Superseded (2026-10-25).** This doc concluded that cleaning should **extend the
+> `data-analysis-service`** with a config-driven Python pipeline. That direction is
+> superseded: data processing (including cleaning / EDA) now lives in **GraFlex**, and the
+> `data-analysis-service` has been retired. GraFlex already provides config-driven cleaning
+> (`clean` / `preview_clean`) and EDA (`run_eda`), which the platform will drive over HTTP.
+> Kept for the historical OpenRefine-vs-Python analysis and the reasoning behind choosing a
+> config-driven pipeline over an interactive GUI tool — that reasoning still applies, it just
+> lands in GraFlex rather than a separate service.
+
 **Context:** The Local Digital Twin platform must perform data cleaning and preprocessing driven by a **user-uploaded configuration file** (no GUI, no human-in-the-loop at runtime). This document compares reusing OpenRefine's ready-made functionality against building a config-driven pipeline in Python (Pandas + PyArrow + scikit-learn).
 
 ## Comparison
